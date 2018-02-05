@@ -123,6 +123,7 @@
     <Compile Include="App_Start\RouteConfig.cs" />
     <Compile Include="App_Start\WebApiConfig.cs" />
     <Content Include="Content\JS\declare.js" />
+    <Content Include="Content\JS\Draw.js" />
     <Content Include="Content\JS\Index.js" />
     <Content Include="Content\JS\ShineStar.js" />
     <Content Include="Global.asax" />

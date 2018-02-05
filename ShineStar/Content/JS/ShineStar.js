@@ -1,4 +1,10 @@
-﻿
+﻿/// <reference path="declare.js" />
+/// <reference path="Draw.js" />
+
+var declare = declare || require('./declare.js');
+var drawLight = drawLight || require('./Draw.js')
+
+
 function RGB(r, g, b) {
     return (r << 16) + (g << 8) + b;
 };
@@ -13,7 +19,7 @@ var SSType =
       //无
       None: 0,         //无
       //光源
-      LSource: 1,
+      Light: 1,
       //平面镜:90度反射光
       MPlane: 2,
       //斜面镜:45/135度反射光
@@ -30,14 +36,8 @@ var SSType =
       Star: 8
   };
 
-//定义方向,上右下左
-var SSDirect =
-  {
-      U: 0, R: 1, D: 2, L: 3
-  }
-
 //定义灯光的进入或者输出的位置
-var SSAngle =
+var SSDirect =
   {
       //左上
       LU: 0,
@@ -76,7 +76,7 @@ var SSItem = declare("SSItem", null,
   {
       constructor: function () { },
       type: SSType.None,
-      direct: SSDirect.U,
+      direct: SSDirect.LU,
       name: 'no name',
       //数值,颜色,通过颜色等,根据类型不同,有不同的作用
       value: 0,
@@ -101,22 +101,59 @@ var SSGame = declare("SSGame", null,
   {
       constructor: function (args) {
           console.info("正在创建游戏");
-          var map = this.WorkMap = new SSMap(args.map0);
-          var ctx = this.WorkMap.ctx;
+          var map = this.map0 = new SSMap(args.map0);
+          var ctx = map.ctx;
 
-          for (var i = 0; i < 200; i++) {
-              var start = new SSStar({ type: SSType.Star, position: new SSPosition(map.getPosition(i)) });
-              this.Items.push(start);
-          }
-          map.draw();
 
-          this.Items.forEach(function (item) {
-              item.draw(map);
-          }, this);
+          var star = new SSStar({ position: new SSPosition(map.getPosition(30)) });
+          this.items.push(star);
+
+          var light = new SSLight({ value: 'gray', position: new SSPosition(map.getPosition(50)) });
+          this.items.push(light);
+
+          light = new SSLight({ value: 'pink', position: new SSPosition(map.getPosition(40)) });
+          this.items.push(light);
+
+          this.draw();
+          var g = this;
+          setInterval(function () { g.draw(); }, 300);
       },
 
-      WorkMap: null,
-      Items: []
+      map0: null,
+      items: [],
+      draw: function () {
+          var g = this;
+          var map = this.map0;
+          var ctx = map.ctx;
+          ctx.save();
+          ctx.clearRect(0, 0, 10000, 10000);
+          ctx.fillStyle = "black";
+          ctx.strokeStyle = "green";
+
+          ctx.translate(map.offsetX, map.offsetY);
+
+          ctx.save();
+          map.draw();
+          ctx.restore();
+
+          this.allDirect = this.allDirect || SSDirect.LU;
+          var ddd = this.allDirect++ % 8;
+          this.items.forEach(function (item) {
+              var pos = item.position;
+              ctx.save();
+
+
+              ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
+
+              //ctx.strokeRect(-5, -5, 10, 10);
+
+              ctx.rotate(Math.PI / 4 * ddd);
+              item.draw(map);
+              ctx.restore();
+          }, this);
+
+          ctx.restore();
+      }
 
   });
 
@@ -129,9 +166,6 @@ var SSMap = declare("SSMap", null,
       constructor: function (args) {
           var e = this.canvas = args.canvas;
           var ctx = this.ctx = e.getContext("2d");
-
-          ctx.strokeStyle = "red";
-          e.style.backgroundColor = 'gray';
 
           //计算块数
           var size = this.size;
@@ -150,29 +184,24 @@ var SSMap = declare("SSMap", null,
           //-1
           var map = this;
           if (idx >= map.cols * map.rows)
-              return new SSPosition({ row: -1, col: -1, x: -10000, y: -10000 });
+              return new SSPosition({ row: -1, col: -1, x: -10000, y: -10000, w: 0, h: 0 });
           var row = Math.floor(idx / map.cols), col = idx % map.cols;
 
           console.info(row, map.size, row * map.size);
-          return new SSPosition({ row: row, col: col, x: col * map.size, y: row * map.size });
+          return new SSPosition({ row: row, col: col, x: col * map.size, y: row * map.size, w: map.size, h: map.size });
       },
       draw: function (map) {
           var ctx = this.ctx;
-          ctx.translate(offsetX, offsetY);
+          //ctx.translate(offsetX, offsetY);
 
           //计算块数
           var size = this.size;
           var rows = this.rows;
           var cols = this.cols;
 
-          //设置偏移量
-          var offsetX = this.offsetX;
-          var offsetY = this.offsetY;
-
           var maxX = cols * size;
           var maxY = rows * size;
-
-          ctx.translate(offsetX, offsetY);
+          ctx.strokeStyle = "red";
 
           ctx.font = "30px 黑体";
           ctx.textBaseline = "top";
@@ -213,48 +242,38 @@ var SSPosition = declare("LPosition", null, {
     //列,0开始
     col: 0,
     x: 0,
-    y: 0
+    y: 0,
+    w: 0,
+    h: 0
 });
 
 //定义光线传输路径
-var SSLighting = declare("SSLighting", null,
+var SSShine = declare("SSShine", null,
   {
       colorIn: SSColor.None,
       colorOut: SSColor.None,
-      angleIn: SSAngle.LU,
-      angleOut: SSAngle.LU,
+      directIn: SSDirect.LU,
+      directOut: SSDirect.LU,
       position: null,
       //下一个光线的位置
       nexts: []
   });
 
 var SSStar = declare("SSStar", SSItem, {
+    type: SSType.Star,
     draw: function (map) {
         this.inherited(arguments);
 
-
-
-
-        //console.info('SSSTar draw.');
         var ctx = map.ctx;
-        ctx.save();
-
 
         var pos = this.position;
-        ctx.translate(pos.x, pos.y);
-
         // ctx.strokeText("A", 0, 0);
-
         //移动到物体中心点
         var pi = Math.PI;
-
-        ctx.translate(map.size / 2, map.size / 2);
         ctx.rotate(pi * 36 / 180);
-
 
         var s = map.size / 2 - 2;
         //创建路径  
-
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255,0,0,0.5)';
 
@@ -266,13 +285,24 @@ var SSStar = declare("SSStar", SSItem, {
         }
         ctx.closePath();
         ctx.stroke();
-
-        ctx.restore();
     }
+});
+
+var SSLight = declare("SSLight", SSItem, {
+    type: SSType.LSource,
+    draw: function (map) {
+        this.inherited(arguments);
+
+
+        var ctx = map.ctx;
+        ctx.strokeStyle = this.value;
+        ctx.fillStyle = this.value;
+        drawLight(map);
+
+    }
+
 });
 
 
 
-
-
-
+module.exports = SSGame;
