@@ -9,6 +9,10 @@ function RGB(r, g, b) {
     return (r << 16) + (g << 8) + b;
 };
 
+function ToColor(number) {
+    return '#' + ('' + number.toString(16)).padStart(6, '0');
+}
+
 //获取盒模型的外部尺寸: left,top,right,bottom,width,height
 function GetBounds(element) {
     return element.getBoundingClientRect();
@@ -79,7 +83,7 @@ var SSItem = declare("SSItem", null,
       direct: SSDirect.LU,
       name: 'no name',
       //数值,颜色,通过颜色等,根据类型不同,有不同的作用
-      value: 0,
+      value: RGB(222, 222, 222),
       //对象所在的位置信息
       position: null,
       //是否可以移动
@@ -88,11 +92,9 @@ var SSItem = declare("SSItem", null,
       roateable: true,
       roate: function (idir) { console.log('roate:', this.name, this.type, idir); },
       draw: function (map) {
-          //var ctx = map.ctx;
+          var ctx = map.ctx;
 
-          //var pos = this.position;
-          ////移动到当前物体的位置索引的基准点
-          //ctx.translate(pos.x, pos.y);
+          //ctx.strokeStyle = ToColor(this.value);
       }
   });
 
@@ -106,51 +108,54 @@ var SSGame = declare("SSGame", null,
 
 
           var star = new SSStar({ position: new SSPosition(map.getPosition(30)) });
-          this.items.push(star);
+          map.items.push(star);
 
-          var light = new SSLight({ value: 'gray', position: new SSPosition(map.getPosition(50)) });
-          this.items.push(light);
+          var cs = [SSColor.Red
+              , SSColor.Blue, SSColor.Yellow, SSColor.Green, SSColor.Pink, SSColor.Cyan
+          ];
+          for (var i = 0; i < 3; i++) {
+              for (var j = 0; j < cs.length; j++) {
 
-          light = new SSLight({ value: 'pink', position: new SSPosition(map.getPosition(40)) });
-          this.items.push(light);
+                  var light = new SSLight({ value: cs[j], position: new SSPosition(map.getPosition(j + i * cs.length*2)) });
+                  map.items.push(light);
 
-          this.draw();
+              }
+          }
+
+          //var light = new SSLight({ value: SSColor.Red, position: new SSPosition(map.getPosition(10)) });
+          //map.items.push(light);
+
+          //light = new SSLight({ value: SSColor.Green, position: new SSPosition(map.getPosition(15)) });
+          //map.items.push(light);
+
+          //light = new SSLight({ value: SSColor.Blue, position: new SSPosition(map.getPosition(20)) });
+          //map.items.push(light);
+
+          //light = new SSLight({ value: SSColor.Pink, position: new SSPosition(map.getPosition(33)) });
+          //map.items.push(light);
+
           var g = this;
+          g.draw();
           setInterval(function () { g.draw(); }, 300);
       },
 
       map0: null,
-      items: [],
+      //光线
+      shines: [],
       draw: function () {
           var g = this;
           var map = this.map0;
           var ctx = map.ctx;
           ctx.save();
-          ctx.clearRect(0, 0, 10000, 10000);
-          ctx.fillStyle = "black";
-          ctx.strokeStyle = "green";
+          ctx.fillStyle = "#EEEEEE";
+          ctx.fillRect(0, 0, 10000, 10000);
+          
 
           ctx.translate(map.offsetX, map.offsetY);
 
-          ctx.save();
+
+
           map.draw();
-          ctx.restore();
-
-          this.allDirect = this.allDirect || SSDirect.LU;
-          var ddd = this.allDirect++ % 8;
-          this.items.forEach(function (item) {
-              var pos = item.position;
-              ctx.save();
-
-
-              ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
-
-              //ctx.strokeRect(-5, -5, 10, 10);
-
-              ctx.rotate(Math.PI / 4 * ddd);
-              item.draw(map);
-              ctx.restore();
-          }, this);
 
           ctx.restore();
       }
@@ -172,23 +177,69 @@ var SSMap = declare("SSMap", null,
           var rows = this.rows = Math.floor(e.height / size);
           var cols = this.cols = Math.floor(e.width / size);
 
+          var count = this.count = rows * cols;
+
           //设置偏移量
           var offsetX = this.offsetX = (e.width - cols * size) / 2;
           var offsetY = this.offsetY = (e.height - rows * size) / 2;
 
 
+
           console.info('canvas', e.width, e.height, size, rows, cols);
 
       },
+      items: [],
+      composes: [],
+      canvas: null,
+      ctx: null,
+
+      offsetX: 0,
+      offsetY: 0,
+      //单元格大小
+      size: 0,
+      rows: 0,
+      cols: 0,
+      count: 0,
+      //间隙
+      gap: 0,
+
       getPosition: function (idx) {
           //-1
           var map = this;
-          if (idx >= map.cols * map.rows)
-              return new SSPosition({ row: -1, col: -1, x: -10000, y: -10000, w: 0, h: 0 });
+          if (idx >= map.cols * map.rows || idx < 0)
+              return new SSPosition({ index: -1, row: -1, col: -1, x: -10000, y: -10000, w: 0, h: 0 });
           var row = Math.floor(idx / map.cols), col = idx % map.cols;
 
-          console.info(row, map.size, row * map.size);
-          return new SSPosition({ row: row, col: col, x: col * map.size, y: row * map.size, w: map.size, h: map.size });
+          //console.info(row, map.size, row * map.size);
+          return new SSPosition({ index: idx, row: row, col: col, x: col * map.size, y: row * map.size, w: map.size, h: map.size });
+      },
+      //获取某个方向上相对于方格的坐标
+      getDirectAxis: function (dir) {
+          var u = this.size / 2;
+          var targets = [[-u, -u], [0, -u], [u, -u], [u, 0], [u, u], [0, u], [-u, u], [-u, 0]];
+          var t = targets[dir % 8];
+          return { x: t[0], y: t[1] };
+      },
+      //获取指定索引位置的组合对象
+      getNextCompose: function (curIndex, direct) {
+          if (curIndex < 0 || curIndex >= this.count || direct < 0 || direct >= 8)
+              return null;//返回0,表示无法找到
+
+          var cols = this.cols, rows = this.rows;
+          var x = curIndex % cols, y = Math.floor(curIndex / cols);
+          if (direct <= 2)
+              y--;
+          if (direct >= 4 && direct <= 6)
+              y++;
+          if (direct == 0 || direct == 6 || direct == 7)
+              x--;
+          if (direct == 2 || direct == 3 || direct == 4)
+              x++;
+          if (x < 0 || y < 0 || x >= cols || y >= rows)
+              return null;
+          var next = x + y * cols;
+          //console.info('cur', curIndex, 'dir', direct, 'next', next);
+          return this.composes[next];
       },
       draw: function (map) {
           var ctx = this.ctx;
@@ -201,11 +252,11 @@ var SSMap = declare("SSMap", null,
 
           var maxX = cols * size;
           var maxY = rows * size;
+
+          ctx.save();
           ctx.strokeStyle = "red";
 
-          ctx.font = "30px 黑体";
-          ctx.textBaseline = "top";
-          //draw line
+          //draw grid
           ctx.beginPath();
           for (var i = 0; i <= rows; i++) {
               ctx.moveTo(0, i * size);
@@ -218,18 +269,86 @@ var SSMap = declare("SSMap", null,
               ctx.lineTo(i * size, maxY);
           }
           ctx.stroke();
-      },
-      canvas: null,
-      ctx: null,
+          ctx.restore();
 
-      offsetX: 0,
-      offsetY: 0,
-      //单元格大小
-      size: 0,
-      rows: 0,
-      cols: 0,
-      //间隙
-      gap: 0
+          var map = this;
+
+          this.allDirect = this.allDirect || SSDirect.LU;
+          var ddd = this.allDirect++ % 8;
+
+
+
+          this.items.forEach(function (item) {
+              var pos = item.position;
+              ctx.save();
+
+
+              ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
+
+              item.direct = (item.direct + 1) % 8;
+
+              //旋转起来看看是否对称
+              //ctx.strokeRect(-5, -5, 10, 10);
+              //ctx.rotate(Math.PI / 4 * ddd);
+
+              item.draw(map);
+              ctx.restore();
+          }, this);
+
+          this.calculate();
+
+          //绘制光线
+          this.composes.forEach(function (c) {
+              ctx.save();
+              c.draw(map);
+              ctx.restore();
+          });
+
+
+
+
+      },
+
+      calculate: function () {
+          var g = this;
+          var shines = g.shines = [];
+
+          //初始化光线组合层
+          var composes = g.composes = [];
+          for (var i = 0; i < g.count; i++) {
+              var c = new SSCompose({ colorIn: [0, 0, 0, 0, 0, 0, 0, 0], colorOut: [0, 0, 0, 0, 0, 0, 0, 0], index: i });
+              this.composes.push(c);
+          }
+
+          //初始化光源
+          g.items.forEach(function (item) {
+              if (item.type != SSType.Light)
+                  return;
+              var shine = new SSShine({
+                  directIn: -1, directOut: item.direct,
+                  colorOut: item.value,
+                  index: item.position.index
+              });
+              shines.push(shine);
+          });
+          //计算光
+          shines.forEach(function (shine) {
+              var c = composes[shine.index];
+              var color = shine.colorOut;
+              //模拟直线传输
+              do {
+                  var dir = (shine.directOut + 4) % 8;
+                  c.colorOut[shine.directOut] |= color;
+                  c.colorIn[dir] |= color;
+                  c = g.getNextCompose(c.index, dir);
+              }
+              while (c != null);
+          });
+
+
+      }
+
+
   });
 
 
@@ -247,6 +366,49 @@ var SSPosition = declare("LPosition", null, {
     h: 0
 });
 
+//定义光线计算结果的组合,每个小格一个
+var SSCompose = declare("SSCompose", null, {
+    //八个方向的输入光源颜色
+    colorIn: [],
+    //八个方向的输出光源颜色
+    colorOut: [],
+    //索引位置
+    index: -1,
+    draw: function (map) {
+
+        var ctx = map.ctx;
+
+        var pos = map.getPosition(this.index);
+        ctx.save();
+        ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
+
+        this.colorIn.forEach(function (c, i) {
+            if (c == 0)
+                return;
+            ctx.beginPath();
+            ctx.strokeStyle = ToColor(c);
+            ctx.moveTo(0, 0);
+            var pt = map.getDirectAxis(i);
+            ctx.lineTo(pt.x, pt.y);
+            ctx.stroke();
+        });
+
+        this.colorOut.forEach(function (c, i) {
+            if (c == 0)
+                return;
+            ctx.beginPath();
+            ctx.strokeStyle = ToColor(c);
+            ctx.moveTo(0, 0);
+            var pt = map.getDirectAxis(i);
+            ctx.lineTo(pt.x, pt.y);
+            ctx.stroke();
+        });
+
+
+        ctx.restore();
+    }
+});
+
 //定义光线传输路径
 var SSShine = declare("SSShine", null,
   {
@@ -254,7 +416,7 @@ var SSShine = declare("SSShine", null,
       colorOut: SSColor.None,
       directIn: SSDirect.LU,
       directOut: SSDirect.LU,
-      position: null,
+      index: -1,
       //下一个光线的位置
       nexts: []
   });
@@ -275,7 +437,7 @@ var SSStar = declare("SSStar", SSItem, {
         var s = map.size / 2 - 2;
         //创建路径  
         ctx.beginPath();
-        ctx.fillStyle = 'rgba(255,0,0,0.5)';
+        ctx.fillStyle = ToColor(this.value);
 
         var dig = pi * 144 / 180;
         for (var i = 0; i < 5; i++) {
@@ -285,18 +447,22 @@ var SSStar = declare("SSStar", SSItem, {
         }
         ctx.closePath();
         ctx.stroke();
+        ctx.fill();
     }
 });
 
 var SSLight = declare("SSLight", SSItem, {
-    type: SSType.LSource,
+    type: SSType.Light,
     draw: function (map) {
         this.inherited(arguments);
 
 
         var ctx = map.ctx;
-        ctx.strokeStyle = this.value;
-        ctx.fillStyle = this.value;
+        ctx.strokeStyle = ToColor(this.value);
+        ctx.fillStyle = ToColor(this.value);
+
+        ctx.rotate(Math.PI / 4 * this.direct);
+
         drawLight(map);
 
     }

@@ -1,20 +1,23 @@
 ﻿function drawLight(map) {
     var ctx = map.ctx;
-    ctx.translate(0, -map.size / 2);
-    ctx.rotate(Math.PI / 4);
 
-    ctx.save();   
+    ctx.rotate(Math.PI / 2);
+    var origin = 512;
+    var rate = map.size * 0.8 / origin;
+
+    ctx.save();
     //ctx.strokeStyle = "rgba(0,0,0,0)";
     ctx.miterLimit = 4;
     ctx.font = "normal normal normal normal 15px / 21.4286px ''";
     ctx.font = "   15px ";
-    ctx.scale(0.05, 0.05);
+    ctx.scale(rate, rate);
+    ctx.translate(-origin / 2, -origin / 2);
     ctx.save();
     ctx.font = "   15px ";
     ctx.restore();
     ctx.save();
     ctx.font = "   15px ";
-    ctx.beginPath();   
+    ctx.beginPath();
     ctx.moveTo(438.144, 73.831);
     ctx.bezierCurveTo(395.238, 30.951, 341.401, 15.258000000000003, 324.25, 32.410000000000004);
     ctx.lineTo(255.233, 101.453);

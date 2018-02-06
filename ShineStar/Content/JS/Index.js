@@ -7,7 +7,7 @@ window.onload = function () {
     var canvas =
         window ? document.getElementById("LCanvas") :
         wx.createCanvas();
-    var game = new SSGame({ map0: { canvas: canvas, size: 35 } });
+    var game = new SSGame({ map0: { canvas: canvas, size: 50 } });
 
     console.info(game);
 
