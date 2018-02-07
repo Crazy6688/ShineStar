@@ -13,6 +13,11 @@ function ToColor(number) {
     return '#' + ('' + number.toString(16)).padStart(6, '0');
 }
 
+//将方向标准化
+function NormolDirect(direct) {
+    return (direct + 8) % 8;
+}
+
 //获取盒模型的外部尺寸: left,top,right,bottom,width,height
 function GetBounds(element) {
     return element.getBoundingClientRect();
@@ -54,7 +59,7 @@ var SSDirect =
       //右下
       RD: 4,
       //下中
-      DM: 5,
+      MD: 5,
       //左下
       LD: 6,
       //左中
@@ -75,28 +80,6 @@ var SSColor =
 
 
 
-//定义对象基类
-var SSItem = declare("SSItem", null,
-  {
-      constructor: function () { },
-      type: SSType.None,
-      direct: SSDirect.LU,
-      name: 'no name',
-      //数值,颜色,通过颜色等,根据类型不同,有不同的作用
-      value: RGB(222, 222, 222),
-      //对象所在的位置信息
-      position: null,
-      //是否可以移动
-      moveable: true,
-      //是否可以转动
-      roateable: true,
-      roate: function (idir) { console.log('roate:', this.name, this.type, idir); },
-      draw: function (map) {
-          var ctx = map.ctx;
-
-          //ctx.strokeStyle = ToColor(this.value);
-      }
-  });
 
 //定义游戏的描述信息
 var SSGame = declare("SSGame", null,
@@ -107,36 +90,54 @@ var SSGame = declare("SSGame", null,
           var ctx = map.ctx;
 
 
-          var star = new SSStar({ position: new SSPosition(map.getPosition(30)) });
-          map.items.push(star);
+          //var star = new SSStar({ position: new SSPosition(map.getPosition(30)) });
+          //map.items.push(star);
 
           var cs = [SSColor.Red
               , SSColor.Blue, SSColor.Yellow, SSColor.Green, SSColor.Pink, SSColor.Cyan
           ];
-          for (var i = 0; i < 3; i++) {
-              for (var j = 0; j < cs.length; j++) {
 
-                  var light = new SSLight({ value: cs[j], position: new SSPosition(map.getPosition(j + i * cs.length*2)) });
-                  map.items.push(light);
+          var light = new SSLight({ value: SSColor.White, direct: SSDirect.RD, position: new SSPosition(map.getPosition(map.count / 2 - map.cols / 2)) });
+          map.items.push(light);
 
+          //var mplane = new SSMPlane({ direct: SSDirect.RU, position: new SSPosition(map.getPosition(light.position.index + (1 + map.cols) * 5)) });
+          //map.items.push(mplane);
+          //for (var i = 0; i < 3; i++) {
+          //    for (var j = 0; j < cs.length; j++) {
+
+          //        var light = new SSLight({ value: cs[j], direct: NormolDirect(j + i), position: new SSPosition(map.getPosition((j + i * cs.length) * 3)) });
+          //        map.items.push(light);
+
+          //    }
+          //}
+
+
+          for (var i = 0; i < map.count; i++) {
+              var row = Math.floor(i / map.cols);
+              var col = i % map.cols;
+              if (row == 0) {
+                  var mplane = new SSMPlane({ direct: SSDirect.MD, position: new SSPosition(map.getPosition(i)) });
+                  map.items.push(mplane);
               }
+              else if (row == map.rows - 1) {
+                  var mplane = new SSMPlane({ direct: SSDirect.MU, position: new SSPosition(map.getPosition(i)) });
+                  map.items.push(mplane);
+              }
+              else if (col == 0) {
+                  var mplane = new SSMPlane({ direct: SSDirect.RM, position: new SSPosition(map.getPosition(i)) });
+                  map.items.push(mplane);
+              }
+              else if (col == map.cols - 1) {
+                  var mplane = new SSMPlane({ direct: SSDirect.LM, position: new SSPosition(map.getPosition(i)) });
+                  map.items.push(mplane);
+              }
+
+
           }
-
-          //var light = new SSLight({ value: SSColor.Red, position: new SSPosition(map.getPosition(10)) });
-          //map.items.push(light);
-
-          //light = new SSLight({ value: SSColor.Green, position: new SSPosition(map.getPosition(15)) });
-          //map.items.push(light);
-
-          //light = new SSLight({ value: SSColor.Blue, position: new SSPosition(map.getPosition(20)) });
-          //map.items.push(light);
-
-          //light = new SSLight({ value: SSColor.Pink, position: new SSPosition(map.getPosition(33)) });
-          //map.items.push(light);
 
           var g = this;
           g.draw();
-          setInterval(function () { g.draw(); }, 300);
+          setInterval(function () { g.draw(); }, 1000 * 0.5);
       },
 
       map0: null,
@@ -146,10 +147,10 @@ var SSGame = declare("SSGame", null,
           var g = this;
           var map = this.map0;
           var ctx = map.ctx;
-          ctx.save();
-          ctx.fillStyle = "#EEEEEE";
+
+          ctx.fillStyle = "#000000";
           ctx.fillRect(0, 0, 10000, 10000);
-          
+          ctx.save();
 
           ctx.translate(map.offsetX, map.offsetY);
 
@@ -189,6 +190,8 @@ var SSMap = declare("SSMap", null,
 
       },
       items: [],
+      //保存索引位置存储的物体
+      itemHash: {},
       composes: [],
       canvas: null,
       ctx: null,
@@ -202,11 +205,16 @@ var SSMap = declare("SSMap", null,
       count: 0,
       //间隙
       gap: 0,
-
+      //验证索引是否合法
+      validIndex: function (idx) {
+          var map = this;
+          return !(idx >= map.cols * map.rows || idx < 0);
+      },
+      //获取某个索引的位置参数
       getPosition: function (idx) {
           //-1
           var map = this;
-          if (idx >= map.cols * map.rows || idx < 0)
+          if (!this.validIndex(idx))
               return new SSPosition({ index: -1, row: -1, col: -1, x: -10000, y: -10000, w: 0, h: 0 });
           var row = Math.floor(idx / map.cols), col = idx % map.cols;
 
@@ -220,10 +228,11 @@ var SSMap = declare("SSMap", null,
           var t = targets[dir % 8];
           return { x: t[0], y: t[1] };
       },
-      //获取指定索引位置的组合对象
-      getNextCompose: function (curIndex, direct) {
-          if (curIndex < 0 || curIndex >= this.count || direct < 0 || direct >= 8)
-              return null;//返回0,表示无法找到
+      //获取下一个直线传播的位置索引,如果不合法,返回-1
+      getNextIndex: function (curIndex, direct) {
+          direct = (direct) % 8;
+          if (!this.validIndex(curIndex))
+              return -1;//表示无法找到
 
           var cols = this.cols, rows = this.rows;
           var x = curIndex % cols, y = Math.floor(curIndex / cols);
@@ -236,23 +245,33 @@ var SSMap = declare("SSMap", null,
           if (direct == 2 || direct == 3 || direct == 4)
               x++;
           if (x < 0 || y < 0 || x >= cols || y >= rows)
-              return null;
+              return -1;
           var next = x + y * cols;
-          //console.info('cur', curIndex, 'dir', direct, 'next', next);
-          return this.composes[next];
+          return next;
+      },
+      //获取指定索引位置的组合对象
+      getNextCompose: function (curIndex, direct) {
+          var next = this.getNextIndex(curIndex, direct);
+          return next >= 0 ? this.composes[next] : null;
+      },
+      //获取索引位置存在的物体,如果没有物体或索引不存在,返回null
+      getItem: function (idx) {
+          if (!this.validIndex(idx))
+              return null;
+          return this.itemHash[idx];
+      },
+      //获取光组合
+      getCompose: function (idx) {
+          if (!this.validIndex(idx)) return null;
+          return this.composes[idx];
       },
       draw: function (map) {
           var ctx = this.ctx;
-          //ctx.translate(offsetX, offsetY);
 
           //计算块数
-          var size = this.size;
-          var rows = this.rows;
-          var cols = this.cols;
-
+          var size = this.size, rows = this.rows, cols = this.cols;
           var maxX = cols * size;
           var maxY = rows * size;
-
           ctx.save();
           ctx.strokeStyle = "red";
 
@@ -274,9 +293,6 @@ var SSMap = declare("SSMap", null,
           var map = this;
 
           this.allDirect = this.allDirect || SSDirect.LU;
-          var ddd = this.allDirect++ % 8;
-
-
 
           this.items.forEach(function (item) {
               var pos = item.position;
@@ -285,15 +301,20 @@ var SSMap = declare("SSMap", null,
 
               ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
 
-              item.direct = (item.direct + 1) % 8;
+              if (item.type == SSType.Light)
+                  item.direct = (item.direct + 1) % 8;
+
+
 
               //旋转起来看看是否对称
               //ctx.strokeRect(-5, -5, 10, 10);
               //ctx.rotate(Math.PI / 4 * ddd);
 
               item.draw(map);
+
               ctx.restore();
           }, this);
+
 
           this.calculate();
 
@@ -320,29 +341,61 @@ var SSMap = declare("SSMap", null,
               this.composes.push(c);
           }
 
-          //初始化光源
+          //初始化光源和物品站位
           g.items.forEach(function (item) {
+              g.itemHash[item.position.index] = item;
               if (item.type != SSType.Light)
                   return;
+
+              //灯源的下一个位置开始计算
               var shine = new SSShine({
-                  directIn: -1, directOut: item.direct,
-                  colorOut: item.value,
-                  index: item.position.index
+                  direct: NormolDirect(item.direct + 4),
+                  color: item.value,
+                  index: g.getNextIndex(item.position.index, item.direct)
               });
               shines.push(shine);
           });
+
+          var funShine = null;
+          funShine = function (inShine) {
+              var c = g.getCompose(inShine.index);
+              if (c == null)
+                  return;       //无效
+
+              var color = inShine.color;
+              var dir = NormolDirect(inShine.direct);       //传入光线的方向
+
+              var item = g.getItem(inShine.index);      //当前是否存在物体
+              if (item == null) {       //没有物体,直接向下传输
+
+                  var nextIndex = g.getNextIndex(inShine.index, NormolDirect(dir + 4));
+
+                  //标记当前颜色
+                  c.colorIn[dir] = c.colorOut[NormolDirect(dir + 4)] |= color;
+
+                  var nextShine = new SSShine({ index: nextIndex, color: color, direct: dir });
+                  funShine(nextShine);
+              }
+              else {
+                  var nextShines = item.shine(inShine);
+
+                  c.colorIn[dir] |= color;
+
+                  //当前颜色如何标记?
+                  nextShines.forEach(function (s) {
+                      c.colorOut[s.direct] |= color;
+
+                      var ndir = NormolDirect(s.direct + 4), nindex = g.getNextIndex(s.index, s.direct);
+                      var ns = new SSShine({ index: nindex, color: s.color, direct: ndir });
+                      funShine(ns);
+                  });
+              }
+          };
+
+
           //计算光
           shines.forEach(function (shine) {
-              var c = composes[shine.index];
-              var color = shine.colorOut;
-              //模拟直线传输
-              do {
-                  var dir = (shine.directOut + 4) % 8;
-                  c.colorOut[shine.directOut] |= color;
-                  c.colorIn[dir] |= color;
-                  c = g.getNextCompose(c.index, dir);
-              }
-              while (c != null);
+              funShine(shine);
           });
 
 
@@ -380,6 +433,10 @@ var SSCompose = declare("SSCompose", null, {
 
         var pos = map.getPosition(this.index);
         ctx.save();
+
+        //ctx.lineCap = 'square';
+        ctx.lineWidth = 3;
+
         ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
 
         this.colorIn.forEach(function (c, i) {
@@ -409,45 +466,53 @@ var SSCompose = declare("SSCompose", null, {
     }
 });
 
-//定义光线传输路径
+//定义光线信息
 var SSShine = declare("SSShine", null,
   {
-      colorIn: SSColor.None,
-      colorOut: SSColor.None,
-      directIn: SSDirect.LU,
-      directOut: SSDirect.LU,
-      index: -1,
-      //下一个光线的位置
-      nexts: []
+      color: SSColor.None,
+      direct: SSDirect.LU,
+      index: -1
+  });
+
+
+//定义实物基类
+var SSItem = declare("SSItem", null,
+  {
+      constructor: function () { },
+      type: SSType.None,
+      direct: SSDirect.MU,
+      name: 'no name',
+      //数值,颜色,通过颜色等,根据类型不同,有不同的作用
+      value: RGB(222, 222, 222),
+      //对象所在的位置信息
+      position: null,
+      //是否可以移动
+      moveable: true,
+      //是否可以转动
+      roateable: true,
+      roate: function (idir) { console.log('roate:', this.name, this.type, idir); },
+      draw: function (map) {
+          var ctx = map.ctx;
+
+          ctx.save();
+          ctx.strokeStyle = "white";
+          ctx.strokeText(this.direct, map.size / 2, 0);
+          ctx.restore();
+          //ctx.strokeStyle = ToColor(this.value);
+          ctx.rotate(Math.PI / 4 * this.direct);
+      },
+      //当光束照射到物体,调用此方法实现调整光线传输路径,返回光线数组
+      shine: function (s) {
+
+          return [];
+      }
   });
 
 var SSStar = declare("SSStar", SSItem, {
     type: SSType.Star,
     draw: function (map) {
-        this.inherited(arguments);
-
-        var ctx = map.ctx;
-
-        var pos = this.position;
-        // ctx.strokeText("A", 0, 0);
-        //移动到物体中心点
-        var pi = Math.PI;
-        ctx.rotate(pi * 36 / 180);
-
-        var s = map.size / 2 - 2;
-        //创建路径  
-        ctx.beginPath();
-        ctx.fillStyle = ToColor(this.value);
-
-        var dig = pi * 144 / 180;
-        for (var i = 0; i < 5; i++) {
-            var x = Math.sin(i * dig);
-            var y = Math.cos(i * dig);
-            ctx.lineTo(x * s, y * s);
-        }
-        ctx.closePath();
-        ctx.stroke();
-        ctx.fill();
+        // this.inherited(arguments);
+        drawStar(map, this);
     }
 });
 
@@ -458,15 +523,67 @@ var SSLight = declare("SSLight", SSItem, {
 
 
         var ctx = map.ctx;
-        ctx.strokeStyle = ToColor(this.value);
-        ctx.fillStyle = ToColor(this.value);
 
-        ctx.rotate(Math.PI / 4 * this.direct);
-
-        drawLight(map);
+        drawLight(map, this);
 
     }
 
+});
+
+var SSMPlane = declare("SSMPlane", SSItem, {
+    type: SSType.MPlane,
+    draw: function (map) {
+        this.inherited(arguments);
+
+        drawPMirror(map, this);
+    },
+    shine: function (s) {
+        var sub =NormolDirect( this.direct - s.direct);
+        var color = s.color ^ 0xFF0000;
+        //Math.abs(this.direct - s.direct);
+        if (sub == 0) {
+            var color = s.color ^ 0xFF0000;
+            var ns = new SSShine({ index: s.index, color: color, direct: this.direct });
+            return [ns];
+        }
+        if (sub == 1) {
+            var color = s.color ^ 0x00FF00;
+            var ns = new SSShine({
+                index: s.index, color: color,
+                direct: NormolDirect(s.direct + 2)
+            });
+            return [ns];
+        }
+        if (sub == 7) {
+            var color = s.color ^ 0x0000FF;
+            var ns = new SSShine({
+                index: s.index, color: color,
+                direct: NormolDirect(s.direct - 2)
+            });
+            return [ns];
+        }
+        //if (sub == 7 || sub == 6) {
+        //    var ns = new SSShine({
+        //        index: s.index, color: color,
+        //        direct: NormolDirect(s.direct + 2)
+        //    });
+        //    return [ns];
+        //}
+        //if (sub == 4)
+        //{
+        //    var ns = new SSShine({ index: s.index, color: s.color, direct: NormolDirect(s.direct + 4) });
+        //    return [ns];
+        //}
+        //if (sub == 7)        //为什么是3,需要根据光线角度和镜面绘制情况处理
+        //{
+        //    var ns = new SSShine({ index: s.index, color: s.color, direct: NormolDirect(s.direct + 2) });
+        //    return [ns];
+        //}
+        //else {
+        //    return [];
+        //}
+        return [];
+    }
 });
 
 

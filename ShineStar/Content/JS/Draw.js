@@ -1,12 +1,41 @@
-﻿function drawLight(map) {
+﻿//绘制五角星
+function drawStar(map, item) {
+    var ctx = map.ctx, size = map.size, half = size / 2;
+
+    var pi = Math.PI;
+
+    ctx.save();
+    ctx.rotate(pi * 36 / 180);
+    var s = half - 2;
+    //创建路径  
+
+
+    ctx.beginPath();
+    ctx.fillStyle = ToColor(item.value);
+
+    var dig = pi * 144 / 180;
+    for (var i = 0; i < 5; i++) {
+        var x = Math.sin(i * dig);
+        var y = Math.cos(i * dig);
+        ctx.lineTo(x * s, y * s);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fill();
+    ctx.restore();
+}
+
+//绘制光源
+function drawLight(map, item) {
     var ctx = map.ctx;
 
-    ctx.rotate(Math.PI / 2);
+    ctx.rotate(-Math.PI / 2);
     var origin = 512;
     var rate = map.size * 0.8 / origin;
 
     ctx.save();
-    //ctx.strokeStyle = "rgba(0,0,0,0)";
+    ctx.strokeStyle = ToColor(item.value);
+    ctx.fillStyle = ToColor(item.value);
     ctx.miterLimit = 4;
     ctx.font = "normal normal normal normal 15px / 21.4286px ''";
     ctx.font = "   15px ";
@@ -47,5 +76,34 @@
     ctx.restore();
     ctx.restore();
 }
+
+//绘制平面镜,规定: 镜面朝上
+function drawPMirror(map) {
+    var ctx = map.ctx, size = map.size, half = size / 2;
+
+    ctx.rotate(Math.PI / 4);
+    var w = size / 6;
+    var w2 = w / 2;
+    var h = size * 0.8;
+    var h2 = h / 2;
+    ctx.save();
+
+    ctx.beginPath();
+
+    ctx.fillStyle = "gray";
+    ctx.fillRect(0, -h2 - 2, w2 + 3, h + 4);
+
+    ctx.strokeStyle = "white";
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, -h2, w2, h);
+    ctx.stroke();
+
+    
+  
+
+    ctx.stroke();
+    ctx.restore();
+}
+
 
 module.exports = drawLight;
