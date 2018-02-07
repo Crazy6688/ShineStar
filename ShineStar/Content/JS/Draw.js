@@ -34,8 +34,8 @@ function drawLight(map, item) {
     var rate = map.size * 0.8 / origin;
 
     ctx.save();
-    ctx.strokeStyle = ToColor(item.value);
-    ctx.fillStyle = ToColor(item.value);
+    ctx.strokeStyle = item.ToColor();
+    ctx.fillStyle = item.ToColor();
     ctx.miterLimit = 4;
     ctx.font = "normal normal normal normal 15px / 21.4286px ''";
     ctx.font = "   15px ";
@@ -98,12 +98,12 @@ function drawPMirror(map) {
     ctx.fillRect(0, -h2, w2, h);
     ctx.stroke();
 
-    
-  
+
+
 
     ctx.stroke();
     ctx.restore();
 }
 
 
-module.exports = drawLight;
+module.exports = [drawLight, drawStar, drawPMirror];

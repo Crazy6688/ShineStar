@@ -1,9 +1,13 @@
 ﻿/// <reference path="declare.js" />
 /// <reference path="Draw.js" />
 
-var declare = declare || require('./declare.js');
-var drawLight = drawLight || require('./Draw.js')
+var iswx = typeof (wx) != 'undefined';
 
+var declare = declare || require('./declare.js');
+var funcs = iswx ? require('./Draw.js') : [drawLight, drawStar, drawPMirror];
+var drawLight = funcs[0];
+var drawStar = funcs[1];
+var drawPMirror = funcs[2];
 
 function RGB(r, g, b) {
     return (r << 16) + (g << 8) + b;
@@ -97,7 +101,10 @@ var SSGame = declare("SSGame", null,
               , SSColor.Blue, SSColor.Yellow, SSColor.Green, SSColor.Pink, SSColor.Cyan
           ];
 
-          var light = new SSLight({ value: SSColor.White, direct: SSDirect.RD, position: new SSPosition(map.getPosition(map.count / 2 - map.cols / 2)) });
+          var light = new SSLight({
+              value: SSColor.White, direct: SSDirect.RD,
+              position: new SSPosition(map.getPosition(map.cols * Math.floor(map.rows / 2) + Math.floor(map.cols / 2)))
+          });
           map.items.push(light);
 
           //var mplane = new SSMPlane({ direct: SSDirect.RU, position: new SSPosition(map.getPosition(light.position.index + (1 + map.cols) * 5)) });
@@ -159,12 +166,34 @@ var SSGame = declare("SSGame", null,
           map.draw();
 
           ctx.restore();
-      }
+      },
+      touchstart: function (e) {
+          console.log('game.touchstart', e);
 
+      },
+      touchmove: function (e) {
+          console.log('game.touchmove', e);
+      },
+      touchend: function (e) {
+          console.log('game.touchend', e);
+      }
   });
 
 module.exports = SSGame;
 //exports.SSGame=SSGame;
+
+var SSMouseAction = {
+    None: 0,
+    Down: 1,
+    Move: 2,
+};
+
+var SSMouseState = declare("SSMouseState", null, {
+    downIndex: -1,
+    upIndex: -1,
+    clickIndex: -1,
+    action: SSMouseAction.None
+});
 
 //定义地图区域
 var SSMap = declare("SSMap", null,
@@ -184,11 +213,47 @@ var SSMap = declare("SSMap", null,
           var offsetX = this.offsetX = (e.width - cols * size) / 2;
           var offsetY = this.offsetY = (e.height - rows * size) / 2;
 
-
-
           console.info('canvas', e.width, e.height, size, rows, cols);
 
+          var map = this;
+          var mouse = map.mouse = new SSMouseState({});
+          return;
+          //为画布添加事件处理
+          e.addEventListener('click', function (ev) {
+              var x = ev.x || ev.clientX, y = ev.y || ev.clientY;
+
+              //计算位置
+              var c = Math.floor(x / map.size);
+              var r = Math.floor(y / map.size);
+
+
+              var idx = mouse.clickIndex = map.cols * r + c;
+              console.info('click', x, y, c, r, idx);
+          }, false);
+
+          e.addEventListener('mousedown', function (ev) {
+              var x = ev.x || ev.clientX, y = ev.y || ev.clientY;
+              var c = Math.floor(x / map.size);
+              var r = Math.floor(y / map.size);
+
+              mouse.downIndex = map.cols * r + c;
+
+              var idx = mouse.clickIndex = map.cols * r + c;
+              console.info('mousedown', x, y, c, r, idx);
+          });
+
+          e.addEventListener('mouseup', function (ev) {
+              var x = ev.x || ev.clientX, y = ev.y || ev.clientY;
+              var c = Math.floor(x / map.size);
+              var r = Math.floor(y / map.size);
+
+              mouse.downIndex = map.cols * r + c;
+
+              var idx = mouse.clickIndex = map.cols * r + c;
+              console.info('mouseup', x, y, c, r, idx);
+          });
       },
+      mouse: null,
       items: [],
       //保存索引位置存储的物体
       itemHash: {},
@@ -356,11 +421,48 @@ var SSMap = declare("SSMap", null,
               shines.push(shine);
           });
 
-          var funShine = null;
-          funShine = function (inShine) {
+          //var funShine = null;
+          //funShine = function (inShine) {
+          //    var c = g.getCompose(inShine.index);
+          //    if (c == null)
+          //        return;       //无效
+
+          //    var color = inShine.color;
+          //    var dir = NormolDirect(inShine.direct);       //传入光线的方向
+
+          //    var item = g.getItem(inShine.index);      //当前是否存在物体
+          //    if (item == null) {       //没有物体,直接向下传输
+
+          //        var nextIndex = g.getNextIndex(inShine.index, NormolDirect(dir + 4));
+
+          //        //标记当前颜色
+          //        c.colorIn[dir] = c.colorOut[NormolDirect(dir + 4)] |= color;
+
+          //        var nextShine = new SSShine({ index: nextIndex, color: color, direct: dir });
+          //        funShine(nextShine);
+          //    }
+          //    else {
+          //        var nextShines = item.shine(inShine);
+
+          //        c.colorIn[dir] |= color;
+
+          //        //当前颜色如何标记?
+          //        nextShines.forEach(function (s) {
+          //            c.colorOut[s.direct] |= color;
+
+          //            var ndir = NormolDirect(s.direct + 4), nindex = g.getNextIndex(s.index, s.direct);
+          //            var ns = new SSShine({ index: nindex, color: s.color, direct: ndir });
+          //            funShine(ns);
+          //        });
+          //    }
+          //};
+
+          var headerShines = [];
+          var getNextShines = function (inShine) {
+
               var c = g.getCompose(inShine.index);
               if (c == null)
-                  return;       //无效
+                  return [];       //无效
 
               var color = inShine.color;
               var dir = NormolDirect(inShine.direct);       //传入光线的方向
@@ -374,30 +476,42 @@ var SSMap = declare("SSMap", null,
                   c.colorIn[dir] = c.colorOut[NormolDirect(dir + 4)] |= color;
 
                   var nextShine = new SSShine({ index: nextIndex, color: color, direct: dir });
-                  funShine(nextShine);
+                  //funShine(nextShine);
+                  //allshines.push(nextShine);
+                  return nextIndex != -1 ? [nextShine] : [];
               }
               else {
                   var nextShines = item.shine(inShine);
 
                   c.colorIn[dir] |= color;
 
+                  var nexts = [];
                   //当前颜色如何标记?
                   nextShines.forEach(function (s) {
                       c.colorOut[s.direct] |= color;
 
                       var ndir = NormolDirect(s.direct + 4), nindex = g.getNextIndex(s.index, s.direct);
                       var ns = new SSShine({ index: nindex, color: s.color, direct: ndir });
-                      funShine(ns);
+                      //funShine(ns);
+                      //allshines.push(nextShine);
+
+                      if (nindex != -1)
+                          nexts.push(ns);
                   });
+                  return nexts;
               }
           };
 
-
           //计算光
-          shines.forEach(function (shine) {
-              funShine(shine);
-          });
-
+          for (var i = 0; i < shines.length; i++) {
+              var c = shines[i];
+              c.nexts = getNextShines(c);
+              // c.nexts.
+              c.nexts.forEach(function (n) { shines.push(n); });
+              //if (shines.length > 333) {
+              //    break;
+              //}
+          }
 
       }
 
@@ -491,6 +605,8 @@ var SSItem = declare("SSItem", null,
       //是否可以转动
       roateable: true,
       roate: function (idir) { console.log('roate:', this.name, this.type, idir); },
+      ToColor: function () { return ToColor(this.value); },
+
       draw: function (map) {
           var ctx = map.ctx;
 
@@ -538,7 +654,7 @@ var SSMPlane = declare("SSMPlane", SSItem, {
         drawPMirror(map, this);
     },
     shine: function (s) {
-        var sub =NormolDirect( this.direct - s.direct);
+        var sub = NormolDirect(this.direct - s.direct);
         var color = s.color ^ 0xFF0000;
         //Math.abs(this.direct - s.direct);
         if (sub == 0) {

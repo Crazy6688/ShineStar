@@ -4,10 +4,52 @@
 
 window.onload = function () {
 
-    var canvas =
-        window ? document.getElementById("LCanvas") :
+    var iswx = typeof (wx) != 'undefined';
+    var canvas = !iswx ? document.getElementById("LCanvas") :
         wx.createCanvas();
+
+
     var game = new SSGame({ map0: { canvas: canvas, size: 50 } });
+
+    if (iswx) {
+        wx.onTouchStart(function (e) {
+            var t = e.touches[0];
+            //console.log(e.type, t.clientX, t.clientY);
+            game.touchstart(t);
+        });
+
+        wx.onTouchMove(function (e) {
+            var t = e.touches[0];
+            //console.log(e.type, t.clientX, t.clientY);
+            game.touchmove(t);
+        });
+
+        wx.onTouchEnd(function (e) {
+            var t = e.changedTouches[0];
+            //console.log(e.type, t.clientX, t.clientY);
+            game.touchend(t);
+        });
+    }
+    else {
+        //canvas.addEventListener('touchstart', game.touchstart, false);
+        //canvas.addEventListener('touchmove', game.touchmove, false);
+        //canvas.addEventListener('touchend', game.touchend, false);
+
+        canvas.addEventListener('mousedown', function (ev) {
+            console.info('mousedown');
+            game.touchstart(ev);
+
+        });
+        canvas.addEventListener('mousemove', function (ev) {
+            console.info('mousemove');
+            game.touchmove(ev);
+        });
+        canvas.addEventListener('mouseup', function (ev) {
+            console.info('mouseup');
+            game.touchstart(ev);
+        });
+
+    }
 
     console.info(game);
 
