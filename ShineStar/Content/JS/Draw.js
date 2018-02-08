@@ -78,7 +78,7 @@ function drawLight(map, item) {
 }
 
 //绘制平面镜,规定: 镜面朝上
-function drawPMirror(map) {
+function drawMPlane(map) {
     var ctx = map.ctx, size = map.size, half = size / 2;
 
     ctx.rotate(Math.PI / 4);
@@ -98,12 +98,59 @@ function drawPMirror(map) {
     ctx.fillRect(0, -h2, w2, h);
     ctx.stroke();
 
-
-
-
-    ctx.stroke();
     ctx.restore();
 }
 
 
-module.exports = [drawLight, drawStar, drawPMirror];
+//绘制斜面镜,规定: 镜面朝上
+function drawMBeveled(map) {
+    var ctx = map.ctx, size = map.size, half = size / 2;
+
+    ctx.rotate(Math.PI / 8);
+    var w = size / 6;
+    var w2 = w / 2;
+    var h = size * 0.8;
+    var h2 = h / 2;
+    ctx.save();
+
+    ctx.beginPath();
+
+    ctx.fillStyle = "green";
+    ctx.fillRect(0, -h2 - 2, w2 + 3, h + 4);
+
+    ctx.strokeStyle = "white";
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, -h2, w2, h);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+
+//绘制透镜,规定: 镜面朝上
+function drawMLens(map) {
+    var ctx = map.ctx, size = map.size, half = size / 2;
+
+    ctx.rotate(Math.PI / 4);
+    var w = size / 6;
+    var w2 = w / 2;
+    var h = size * 0.7;
+    var h2 = h / 2;
+    ctx.save();
+
+    ctx.beginPath();
+
+    ctx.fillStyle = "white";
+    ctx.fillRect(-w2, -h2, w , h);
+
+    ctx.strokeStyle = "gray";
+    ctx.fillStyle = "gray";
+
+    ctx.fillRect(-w2 - 3, -h2 - 2, w + 6, 2);
+    ctx.fillRect(-w2 - 3, h2 - 2, w + 6, 2);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+module.exports = [null, drawLight, drawMPlane, drawMBeveled, drawMLens, null, null, null, drawStar];

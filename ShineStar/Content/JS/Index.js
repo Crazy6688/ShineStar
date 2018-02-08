@@ -8,25 +8,27 @@ window.onload = function () {
     var canvas = !iswx ? document.getElementById("LCanvas") :
         wx.createCanvas();
 
-
     var game = new SSGame({ canvas: canvas });
 
     if (iswx) {
         wx.onTouchStart(function (e) {
             var t = e.touches[0];
             //console.log(e.type, t.clientX, t.clientY);
+            t.type = 'touchstart';
             game.touchstart(t);
         });
 
         wx.onTouchMove(function (e) {
             var t = e.touches[0];
             //console.log(e.type, t.clientX, t.clientY);
+            t.type = 'touchmove';
             game.touchmove(t);
         });
 
         wx.onTouchEnd(function (e) {
             var t = e.changedTouches[0];
             //console.log(e.type, t.clientX, t.clientY);
+            t.type = 'touchend';
             game.touchend(t);
         });
     }

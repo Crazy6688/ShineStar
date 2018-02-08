@@ -4,10 +4,8 @@
 var iswx = typeof (wx) != 'undefined';
 
 var declare = declare || require('./declare.js');
-var funcs = iswx ? require('./Draw.js') : [drawLight, drawStar, drawPMirror];
-var drawLight = funcs[0];
-var drawStar = funcs[1];
-var drawPMirror = funcs[2];
+var drawFuncs = iswx ? require('./Draw.js') : [null, drawLight, drawMPlane, drawMBeveled, drawMLens, null, null, null, drawStar];
+
 
 function RGB(r, g, b) {
     return (r << 16) + (g << 8) + b;
@@ -124,17 +122,12 @@ var SSGame = declare("SSGame", null,
               , SSColor.Blue, SSColor.Yellow, SSColor.Green, SSColor.Pink, SSColor.Cyan
           ];
 
-          var light = new SSLight({
-              value: SSColor.White, direct: SSDirect.RD,
-              position: new SSPosition(map.getPosition(map.cols * Math.floor(map.rows / 2) + Math.floor(map.cols / 2)))
-          });
-          map.items.push(light);
-          var light = new SSLight({
-              value: SSColor.White, direct: SSDirect.RD,
-              position: new SSPosition(map.getPosition(map.cols * Math.floor(map.rows / 2) + Math.floor(map.cols / 2) + 1))
-          });
-        
+          var lightIndex = map.cols * Math.floor(map.rows / 2) + Math.floor(map.cols / 2);
 
+          var light = new SSLight({
+              value: SSColor.White, direct: SSDirect.RD,
+              position: new SSPosition(map.getPosition(lightIndex))
+          });
           map.items.push(light);
 
           //var mplane = new SSMPlane({ direct: SSDirect.RU, position: new SSPosition(map.getPosition(light.position.index + (1 + map.cols) * 5)) });
@@ -148,6 +141,17 @@ var SSGame = declare("SSGame", null,
           //    }
           //}
 
+          var mbeveled = new SSMBeveled({
+              direct: SSDirect.MU,
+              position: new SSPosition(map.getPosition(lightIndex + map.cols))
+          });
+          map.items.push(mbeveled);
+
+          var mlens = new SSMLens({
+              direct: SSDirect.MU,
+              position: new SSPosition(map.getPosition(lightIndex + map.cols * 2))
+          });
+          map.items.push(mlens);
 
           for (var i = 0; i < map.count; i++) {
               var row = Math.floor(i / map.cols);
@@ -614,9 +618,9 @@ var SSMap = declare("SSMap", SSMapBase,
               c.nexts = getNextShines(c);
               // c.nexts.
               c.nexts.forEach(function (n) { shines.push(n); });
-              //if (shines.length > 333) {
-              //    break;
-              //}
+              if (shines.length > 333) {
+                  break;
+              }
           }
 
       }
@@ -779,7 +783,7 @@ var SSLight = declare("SSLight", SSItem, {
 
         var ctx = map.ctx;
 
-        drawLight(map, this);
+        drawFuncs[this.type](map, this);
 
     }
 
@@ -789,8 +793,7 @@ var SSMPlane = declare("SSMPlane", SSItem, {
     type: SSType.MPlane,
     draw: function (map) {
         this.inherited(arguments);
-
-        drawPMirror(map, this);
+        drawFuncs[this.type](map, this);
     },
     shine: function (s) {
         var sub = NormalDirect(this.direct - s.direct);
@@ -821,6 +824,75 @@ var SSMPlane = declare("SSMPlane", SSItem, {
     }
 });
 
+var SSMBeveled = declare("SSMBeveled", SSItem, {
+    type: SSType.MBeveled,
+    draw: function (map) {
+        this.inherited(arguments);
+        drawFuncs[this.type](map, this);
+    },
+    shine: function (s) {
+        var sub = NormalDirect(this.direct - s.direct);
+        if (sub == 0) {
+            var ns = new SSShine({
+                index: s.index, color: s.color,
+                direct: NormalDirect(s.direct - 1)
+            });
+            return [ns];
+        }
+        if (sub == 1) {
+            var ns = new SSShine({
+                index: s.index, color: s.color,
+                direct: NormalDirect(s.direct + 1)
+            });
+            return [ns];
+        }
+        if (sub == 2) {
+            var ns = new SSShine({
+                index: s.index, color: s.color,
+                direct: NormalDirect(s.direct + 3)
+            });
+            return [ns];
+        }
+        if (sub == 7) {
+            var ns = new SSShine({
+                index: s.index, color: s.color,
+                direct: NormalDirect(s.direct - 3)
+            });
+            return [ns];
+        }
+        return [];
+    }
+});
+
+//透镜
+var SSMLens = declare("SSMLens", SSItem, {
+    type: SSType.MLens,
+    draw: function (map) {
+        this.inherited(arguments);
+        drawFuncs[this.type](map, this);
+    },
+    shine: function (s) {
+        var sub = NormalDirect(this.direct - s.direct);
+        var color = s.color ^ 0xFF0000;
+        //Math.abs(this.direct - s.direct);
+        if (sub == 2 || sub == 6) {
+            return [];
+        }
+        var ns1 = new SSShine({ index: s.index, color: s.color, direct: NormalDirect(s.direct + 4) });
+
+        if (sub == 1 || sub == 5) {
+            var ns2 = new SSShine({ index: s.index, color: s.color, direct: NormalDirect(s.direct + 2) });
+            return [ns1, ns2];
+        }
+        if (sub == 3 || sub == 7) {
+            var ns2 = new SSShine({ index: s.index, color: s.color, direct: NormalDirect(s.direct - 2) });
+            return [ns1, ns2];
+        }
+
+
+        return [ns1];
+    }
+});
 
 
 module.exports = SSGame;
