@@ -18,7 +18,7 @@ function ToColor(number) {
 }
 
 //将方向标准化
-function NormolDirect(direct) {
+function NormalDirect(direct) {
     return (direct + 8) % 8;
 }
 
@@ -83,7 +83,24 @@ var SSColor =
   };
 
 
+var SSMouseAction = {
+    None: 0,
+    Down: 1,
+    Move: 2,
+};
 
+var SSMouseState = declare("SSMouseState", null, {
+    valid: 0,
+    clientX: -1,
+    clientY: -1,
+    downX: -1,
+    downY: -1,
+    downIndex: -1,
+    upIndex: -1,
+    moveIndex: -1,
+    clickIndex: -1,
+    action: SSMouseAction.None
+});
 
 //定义游戏的描述信息
 var SSGame = declare("SSGame", null,
@@ -112,7 +129,7 @@ var SSGame = declare("SSGame", null,
           //for (var i = 0; i < 3; i++) {
           //    for (var j = 0; j < cs.length; j++) {
 
-          //        var light = new SSLight({ value: cs[j], direct: NormolDirect(j + i), position: new SSPosition(map.getPosition((j + i * cs.length) * 3)) });
+          //        var light = new SSLight({ value: cs[j], direct: NormalDirect(j + i), position: new SSPosition(map.getPosition((j + i * cs.length) * 3)) });
           //        map.items.push(light);
 
           //    }
@@ -144,12 +161,11 @@ var SSGame = declare("SSGame", null,
 
           var g = this;
           g.draw();
-          setInterval(function () { g.draw(); }, 1000 * 0.5);
+          setInterval(function () { g.draw(); }, 16);
       },
 
       map0: null,
-      //光线
-      shines: [],
+
       draw: function () {
           var g = this;
           var map = this.map0;
@@ -168,168 +184,266 @@ var SSGame = declare("SSGame", null,
           ctx.restore();
       },
       touchstart: function (e) {
-          console.log('game.touchstart', e);
 
+          var m = this.map0.normalTouchEvent(e);
+          m.event = e;
+          this.map0.action();
+          if (m.valid) {
+              console.log('game.touchstart', m);
+          }
       },
       touchmove: function (e) {
-          console.log('game.touchmove', e);
+          var m = this.map0.normalTouchEvent(e);
+          m.event = e;
+          this.map0.action();
+          if (m.valid) {
+              console.log('game.touchmove', m);
+          }
       },
       touchend: function (e) {
-          console.log('game.touchend', e);
+          var m = this.map0.normalTouchEvent(e);
+          m.event = e;
+          this.map0.action();
+          if (m.valid) {
+              console.log('game.touchend', m);
+          }
       }
   });
 
-module.exports = SSGame;
-//exports.SSGame=SSGame;
+var SSMapBase = declare("SSMapBase", null, {
+    constructor: function (args) {
+        var e = this.canvas = args.canvas;
+        var ctx = this.ctx = e.getContext("2d");
 
-var SSMouseAction = {
-    None: 0,
-    Down: 1,
-    Move: 2,
-};
+        //计算块数
+        //var size = this.size;
+        //var rows = this.rows = Math.floor(e.height / size);
+        //var cols = this.cols = Math.floor(e.width / size);
 
-var SSMouseState = declare("SSMouseState", null, {
-    downIndex: -1,
-    upIndex: -1,
-    clickIndex: -1,
-    action: SSMouseAction.None
+        //计算块数
+        var rows = this.rows = args.rows;
+        var cols = this.cols = args.cols;
+        var xsize = Math.floor((e.width - args.x) / rows);
+        var ysize = Math.floor((e.height - args.y) / cols);
+        var size = this.size = Math.min(xsize, ysize);
+
+
+        var count = this.count = rows * cols;
+
+        //设置偏移量
+        var offsetX = this.offsetX = args.x;// + (e.width - cols * size) / 2;
+        var offsetY = this.offsetY = args.y;// + (e.height - rows * size) / 2;
+
+        console.info('canvas', e.width, e.height, size, rows, cols);
+
+        var map = this;
+        var mouse = map.mouse = new SSMouseState({});
+
+
+    },
+    mouse: null,
+    items: [],
+    //保存索引位置存储的物体
+    itemHash: {},
+    canvas: null,
+    ctx: null,
+    offsetX: 0,
+    offsetY: 0,
+    //单元格大小
+    size: 0,
+    rows: 0,
+    cols: 0,
+    count: 0,
+    //间隙
+    gap: 0,
+
+    //判断坐标点是否在地图区域内
+    isPointInClient: function (pt) {
+        var rect = this.getClientRect();
+        var c = this.canvas;
+        var x = pt.x - c.offsetLeft - this.offsetX;
+        var y = pt.y - c.offsetTop - this.offsetY;
+        var at = (x >= rect.x && y >= rect.y && x <= rect.x + rect.w && y <= rect.y + rect.h);
+        console.info(at);
+        return at;
+    },
+    //获取当前map的位置区域,相对于canvas
+    getClientRect: function () {
+        return { x: this.offsetX, y: this.offsetY, w: this.size * this.cols, h: this.size * this.rows };
+    },
+    //返回一个标准化的鼠标状态
+    normalTouchEvent: function (e) {
+        var isinmap = this.isPointInClient({ x: e.clientX, y: e.clientY });
+
+        var m = this.mouse, c = this.canvas;
+        var x = e.clientX - c.offsetLeft - this.offsetX;
+        var y = e.clientY - c.offsetTop - this.offsetY;
+        m.clientX = x;
+        m.clientY = y;
+
+        if (isinmap) {
+
+            var index = this.getIndex(x, y);
+
+            m.clickIndex = -1;
+            m.valid = 0;
+            if (e.type == 'touchstart' || (e.type == 'mousedown' && e.buttons == 1)) {
+                m.action = SSMouseAction.Down;
+                m.downIndex = index;
+                m.downX = x;
+                m.downY = y;
+                m.valid = 1;
+            }
+            else if ((e.type == 'touchmove' || (e.type == 'mousemove' && e.buttons == 1))) {
+                if (m.action == SSMouseAction.Down && ((Math.abs(m.downX - x) > this.size / 2)) || (Math.abs(m.downY - y) > this.size / 2)) {
+                    m.action = SSMouseAction.Move;
+                    m.valid = 1;
+                }
+                else if (m.action == SSMouseAction.Move) {
+                    m.action = SSMouseAction.Move;
+                    m.valid = 1;
+                    m.moveIndex = index;
+                }
+                else {
+                    m.valid = 1;
+                    m.moveIndex = -1;
+                }
+            }
+            else if (e.type == 'touchend' || (e.type == 'mouseup')) {
+                m.action = SSMouseAction.None;
+                m.upIndex = index;
+                m.valid = 1;
+                if (m.downIndex == m.upIndex) {
+                    m.clickIndex = index;
+                }
+            }
+            else {
+                m.action = SSMouseAction.None;
+                m.upIndex = m.downIndex = m.clickIndex = m.moveIndex = -1;
+                m.valid = 0;
+            }
+            return this.mouse;
+        }
+        else {
+            this.mouse = new SSMouseState();
+        }
+        return this.mouse;
+    },
+    //验证索引是否合法
+    validIndex: function (idx) {
+        var map = this;
+        return !(idx >= map.cols * map.rows || idx < 0);
+    },
+    //获取某个索引的位置参数
+    getPosition: function (idx) {
+        //-1
+        var map = this;
+        if (!this.validIndex(idx))
+            return new SSPosition({ index: -1, row: -1, col: -1, x: -10000, y: -10000, w: 0, h: 0 });
+        var row = Math.floor(idx / map.cols), col = idx % map.cols;
+
+        //console.info(row, map.size, row * map.size);
+        return new SSPosition({ index: idx, row: row, col: col, x: col * map.size, y: row * map.size, w: map.size, h: map.size });
+    },
+    //获取某个方向上相对于方格的坐标
+    getDirectAxis: function (dir) {
+        var u = this.size / 2;
+        var targets = [[-u, -u], [0, -u], [u, -u], [u, 0], [u, u], [0, u], [-u, u], [-u, 0]];
+        var t = targets[dir % 8];
+        return { x: t[0], y: t[1] };
+    },
+    //获取相对坐标所在的索引位置
+    getIndex: function (p, p2) {
+        var x = p.x || p.clientX || p;
+        var y = p2 || p.y;
+        var col = Math.floor(x / this.size);
+        var row = Math.floor(y / this.size);
+        if (col >= 0 && col < this.cols && row >= 0 && row < this.rows)
+            return row * this.cols + col;
+        else
+            return -1;
+    },
+    //获取下一个直线传播的位置索引,如果不合法,返回-1
+    getNextIndex: function (curIndex, direct) {
+        direct = (direct) % 8;
+        if (!this.validIndex(curIndex))
+            return -1;//表示无法找到
+
+        var cols = this.cols, rows = this.rows;
+        var x = curIndex % cols, y = Math.floor(curIndex / cols);
+        if (direct <= 2)
+            y--;
+        if (direct >= 4 && direct <= 6)
+            y++;
+        if (direct == 0 || direct == 6 || direct == 7)
+            x--;
+        if (direct == 2 || direct == 3 || direct == 4)
+            x++;
+        if (x < 0 || y < 0 || x >= cols || y >= rows)
+            return -1;
+        var next = x + y * cols;
+        return next;
+    },
+    //获取索引位置存在的物体,如果没有物体或索引不存在,返回null
+    getItem: function (idx) {
+        if (!this.validIndex(idx))
+            return null;
+        return this.itemHash[idx];
+    },
+    action: function () {
+        var m = this.mouse;
+        if (m.downIndex != -1) {
+            //绘制
+            var item = this.getItem(m.downIndex);
+            this.moveItem = item;
+        }
+        if (m.moveIndex != -1 && this.moveItem != null) {
+            this.moveItem.moving = true;
+            this.moveItem.moveX = m.clientX;
+            this.moveItem.moveY = m.clientY;
+
+        }
+        if (m.clickIndex != -1) {
+            var item = this.getItem(m.clickIndex);
+            if (item != null) {
+                item.rotate();
+            }
+        }
+        if (m.upIndex != m.downIndex && m.upIndex != -1) {
+            var dItem = this.getItem(m.downIndex);
+            var uItem = this.getItem(m.upIndex);
+            if (uItem == null && dItem != null) {
+                dItem.position = this.getPosition(m.upIndex);
+            }
+        }
+        if (m.action == SSMouseAction.None) {
+            if (this.moveItem != null)
+                this.moveItem.moving = false;
+            this.moveItem = null;
+        }
+    }
 });
 
 //定义地图区域
-var SSMap = declare("SSMap", null,
+var SSMap = declare("SSMap", SSMapBase,
   {
       constructor: function (args) {
-          var e = this.canvas = args.canvas;
-          var ctx = this.ctx = e.getContext("2d");
 
-          //计算块数
-          var size = this.size;
-          var rows = this.rows = Math.floor(e.height / size);
-          var cols = this.cols = Math.floor(e.width / size);
-
-          var count = this.count = rows * cols;
-
-          //设置偏移量
-          var offsetX = this.offsetX = (e.width - cols * size) / 2;
-          var offsetY = this.offsetY = (e.height - rows * size) / 2;
-
-          console.info('canvas', e.width, e.height, size, rows, cols);
-
-          var map = this;
-          var mouse = map.mouse = new SSMouseState({});
-          return;
-          //为画布添加事件处理
-          e.addEventListener('click', function (ev) {
-              var x = ev.x || ev.clientX, y = ev.y || ev.clientY;
-
-              //计算位置
-              var c = Math.floor(x / map.size);
-              var r = Math.floor(y / map.size);
-
-
-              var idx = mouse.clickIndex = map.cols * r + c;
-              console.info('click', x, y, c, r, idx);
-          }, false);
-
-          e.addEventListener('mousedown', function (ev) {
-              var x = ev.x || ev.clientX, y = ev.y || ev.clientY;
-              var c = Math.floor(x / map.size);
-              var r = Math.floor(y / map.size);
-
-              mouse.downIndex = map.cols * r + c;
-
-              var idx = mouse.clickIndex = map.cols * r + c;
-              console.info('mousedown', x, y, c, r, idx);
-          });
-
-          e.addEventListener('mouseup', function (ev) {
-              var x = ev.x || ev.clientX, y = ev.y || ev.clientY;
-              var c = Math.floor(x / map.size);
-              var r = Math.floor(y / map.size);
-
-              mouse.downIndex = map.cols * r + c;
-
-              var idx = mouse.clickIndex = map.cols * r + c;
-              console.info('mouseup', x, y, c, r, idx);
-          });
       },
-      mouse: null,
-      items: [],
-      //保存索引位置存储的物体
-      itemHash: {},
+
       composes: [],
-      canvas: null,
-      ctx: null,
 
-      offsetX: 0,
-      offsetY: 0,
-      //单元格大小
-      size: 0,
-      rows: 0,
-      cols: 0,
-      count: 0,
-      //间隙
-      gap: 0,
-      //验证索引是否合法
-      validIndex: function (idx) {
-          var map = this;
-          return !(idx >= map.cols * map.rows || idx < 0);
-      },
-      //获取某个索引的位置参数
-      getPosition: function (idx) {
-          //-1
-          var map = this;
-          if (!this.validIndex(idx))
-              return new SSPosition({ index: -1, row: -1, col: -1, x: -10000, y: -10000, w: 0, h: 0 });
-          var row = Math.floor(idx / map.cols), col = idx % map.cols;
-
-          //console.info(row, map.size, row * map.size);
-          return new SSPosition({ index: idx, row: row, col: col, x: col * map.size, y: row * map.size, w: map.size, h: map.size });
-      },
-      //获取某个方向上相对于方格的坐标
-      getDirectAxis: function (dir) {
-          var u = this.size / 2;
-          var targets = [[-u, -u], [0, -u], [u, -u], [u, 0], [u, u], [0, u], [-u, u], [-u, 0]];
-          var t = targets[dir % 8];
-          return { x: t[0], y: t[1] };
-      },
-      //获取下一个直线传播的位置索引,如果不合法,返回-1
-      getNextIndex: function (curIndex, direct) {
-          direct = (direct) % 8;
-          if (!this.validIndex(curIndex))
-              return -1;//表示无法找到
-
-          var cols = this.cols, rows = this.rows;
-          var x = curIndex % cols, y = Math.floor(curIndex / cols);
-          if (direct <= 2)
-              y--;
-          if (direct >= 4 && direct <= 6)
-              y++;
-          if (direct == 0 || direct == 6 || direct == 7)
-              x--;
-          if (direct == 2 || direct == 3 || direct == 4)
-              x++;
-          if (x < 0 || y < 0 || x >= cols || y >= rows)
-              return -1;
-          var next = x + y * cols;
-          return next;
-      },
       //获取指定索引位置的组合对象
       getNextCompose: function (curIndex, direct) {
           var next = this.getNextIndex(curIndex, direct);
           return next >= 0 ? this.composes[next] : null;
-      },
-      //获取索引位置存在的物体,如果没有物体或索引不存在,返回null
-      getItem: function (idx) {
-          if (!this.validIndex(idx))
-              return null;
-          return this.itemHash[idx];
       },
       //获取光组合
       getCompose: function (idx) {
           if (!this.validIndex(idx)) return null;
           return this.composes[idx];
       },
+
       draw: function (map) {
           var ctx = this.ctx;
 
@@ -363,25 +477,31 @@ var SSMap = declare("SSMap", null,
               var pos = item.position;
               ctx.save();
 
+              //ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
 
-              ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
-
-              if (item.type == SSType.Light)
-                  item.direct = (item.direct + 1) % 8;
-
-
+              //if (item.type == SSType.Light)
+              //    item.direct = (item.direct + 1) % 8;
 
               //旋转起来看看是否对称
               //ctx.strokeRect(-5, -5, 10, 10);
               //ctx.rotate(Math.PI / 4 * ddd);
 
               item.draw(map);
-
               ctx.restore();
           }, this);
 
 
           this.calculate();
+
+          //鼠标调试
+          ctx.fillStyle = "blue";
+          ctx.font = "30px Arial";
+          ctx.fillText(" pt:" + this.mouse.clientX + "," + this.mouse.clientY + " di:" + this.mouse.downIndex + " ui:" + this.mouse.upIndex + " mi:" + this.mouse.moveIndex, 0, 50);
+
+          var e = this.mouse.event;
+          if (e)
+              ctx.fillText(" ept:" + e.clientX + "," + e.clientY, 0, 150);
+
 
           //绘制光线
           this.composes.forEach(function (c) {
@@ -398,7 +518,7 @@ var SSMap = declare("SSMap", null,
       calculate: function () {
           var g = this;
           var shines = g.shines = [];
-
+          var itemHash = g.itemHash = {};
           //初始化光线组合层
           var composes = g.composes = [];
           for (var i = 0; i < g.count; i++) {
@@ -408,54 +528,19 @@ var SSMap = declare("SSMap", null,
 
           //初始化光源和物品站位
           g.items.forEach(function (item) {
-              g.itemHash[item.position.index] = item;
+              itemHash[item.position.index] = item;
               if (item.type != SSType.Light)
                   return;
 
               //灯源的下一个位置开始计算
               var shine = new SSShine({
-                  direct: NormolDirect(item.direct + 4),
+                  direct: NormalDirect(item.direct + 4),
                   color: item.value,
                   index: g.getNextIndex(item.position.index, item.direct)
               });
               shines.push(shine);
           });
 
-          //var funShine = null;
-          //funShine = function (inShine) {
-          //    var c = g.getCompose(inShine.index);
-          //    if (c == null)
-          //        return;       //无效
-
-          //    var color = inShine.color;
-          //    var dir = NormolDirect(inShine.direct);       //传入光线的方向
-
-          //    var item = g.getItem(inShine.index);      //当前是否存在物体
-          //    if (item == null) {       //没有物体,直接向下传输
-
-          //        var nextIndex = g.getNextIndex(inShine.index, NormolDirect(dir + 4));
-
-          //        //标记当前颜色
-          //        c.colorIn[dir] = c.colorOut[NormolDirect(dir + 4)] |= color;
-
-          //        var nextShine = new SSShine({ index: nextIndex, color: color, direct: dir });
-          //        funShine(nextShine);
-          //    }
-          //    else {
-          //        var nextShines = item.shine(inShine);
-
-          //        c.colorIn[dir] |= color;
-
-          //        //当前颜色如何标记?
-          //        nextShines.forEach(function (s) {
-          //            c.colorOut[s.direct] |= color;
-
-          //            var ndir = NormolDirect(s.direct + 4), nindex = g.getNextIndex(s.index, s.direct);
-          //            var ns = new SSShine({ index: nindex, color: s.color, direct: ndir });
-          //            funShine(ns);
-          //        });
-          //    }
-          //};
 
           var headerShines = [];
           var getNextShines = function (inShine) {
@@ -465,15 +550,15 @@ var SSMap = declare("SSMap", null,
                   return [];       //无效
 
               var color = inShine.color;
-              var dir = NormolDirect(inShine.direct);       //传入光线的方向
+              var dir = NormalDirect(inShine.direct);       //传入光线的方向
 
               var item = g.getItem(inShine.index);      //当前是否存在物体
               if (item == null) {       //没有物体,直接向下传输
 
-                  var nextIndex = g.getNextIndex(inShine.index, NormolDirect(dir + 4));
+                  var nextIndex = g.getNextIndex(inShine.index, NormalDirect(dir + 4));
 
                   //标记当前颜色
-                  c.colorIn[dir] = c.colorOut[NormolDirect(dir + 4)] |= color;
+                  c.colorIn[dir] = c.colorOut[NormalDirect(dir + 4)] |= color;
 
                   var nextShine = new SSShine({ index: nextIndex, color: color, direct: dir });
                   //funShine(nextShine);
@@ -490,7 +575,7 @@ var SSMap = declare("SSMap", null,
                   nextShines.forEach(function (s) {
                       c.colorOut[s.direct] |= color;
 
-                      var ndir = NormolDirect(s.direct + 4), nindex = g.getNextIndex(s.index, s.direct);
+                      var ndir = NormalDirect(s.direct + 4), nindex = g.getNextIndex(s.index, s.direct);
                       var ns = new SSShine({ index: nindex, color: s.color, direct: ndir });
                       //funShine(ns);
                       //allshines.push(nextShine);
@@ -600,17 +685,50 @@ var SSItem = declare("SSItem", null,
       value: RGB(222, 222, 222),
       //对象所在的位置信息
       position: null,
+      moving: false,
       //是否可以移动
       moveable: true,
       //是否可以转动
       roateable: true,
-      roate: function (idir) { console.log('roate:', this.name, this.type, idir); },
+      rotate: function () {
+          this.direct = NormalDirect(this.direct + 1);
+          console.log('roate:', this.name, this.type, this.direct);
+      },
       ToColor: function () { return ToColor(this.value); },
 
       draw: function (map) {
           var ctx = map.ctx;
 
+          if (this.moving) {
+              //高亮目标方格框
+              var p = this.position;
+              var pIndex = map.getIndex(this.moveX, this.moveY);
+              if (pIndex >= 0) {
+                  var pos = map.getPosition(pIndex);
+
+                  ctx.save();
+                  ctx.strokeStyle = "white";
+                  ctx.strokeRect(pos.x, pos.y, pos.w, pos.h);
+                  ctx.restore();
+              }
+
+              //设置偏移到物体中心
+              ctx.translate(this.moveX, this.moveY - map.size / 3);
+              ctx.beginPath();
+              ctx.strokeStyle = "white";
+              ctx.stroke();
+
+
+
+          }
+          else {
+              var pos = this.position;
+              ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
+          }
+
+
           ctx.save();
+
           ctx.strokeStyle = "white";
           ctx.strokeText(this.direct, map.size / 2, 0);
           ctx.restore();
@@ -654,7 +772,7 @@ var SSMPlane = declare("SSMPlane", SSItem, {
         drawPMirror(map, this);
     },
     shine: function (s) {
-        var sub = NormolDirect(this.direct - s.direct);
+        var sub = NormalDirect(this.direct - s.direct);
         var color = s.color ^ 0xFF0000;
         //Math.abs(this.direct - s.direct);
         if (sub == 0) {
@@ -666,7 +784,7 @@ var SSMPlane = declare("SSMPlane", SSItem, {
             var color = s.color ^ 0x00FF00;
             var ns = new SSShine({
                 index: s.index, color: color,
-                direct: NormolDirect(s.direct + 2)
+                direct: NormalDirect(s.direct + 2)
             });
             return [ns];
         }
@@ -674,30 +792,10 @@ var SSMPlane = declare("SSMPlane", SSItem, {
             var color = s.color ^ 0x0000FF;
             var ns = new SSShine({
                 index: s.index, color: color,
-                direct: NormolDirect(s.direct - 2)
+                direct: NormalDirect(s.direct - 2)
             });
             return [ns];
         }
-        //if (sub == 7 || sub == 6) {
-        //    var ns = new SSShine({
-        //        index: s.index, color: color,
-        //        direct: NormolDirect(s.direct + 2)
-        //    });
-        //    return [ns];
-        //}
-        //if (sub == 4)
-        //{
-        //    var ns = new SSShine({ index: s.index, color: s.color, direct: NormolDirect(s.direct + 4) });
-        //    return [ns];
-        //}
-        //if (sub == 7)        //为什么是3,需要根据光线角度和镜面绘制情况处理
-        //{
-        //    var ns = new SSShine({ index: s.index, color: s.color, direct: NormolDirect(s.direct + 2) });
-        //    return [ns];
-        //}
-        //else {
-        //    return [];
-        //}
         return [];
     }
 });

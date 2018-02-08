@@ -9,7 +9,7 @@ window.onload = function () {
         wx.createCanvas();
 
 
-    var game = new SSGame({ map0: { canvas: canvas, size: 50 } });
+    var game = new SSGame({ map0: { canvas: canvas, rows: 8, cols: 8, x: 10, y: 10 } });
 
     if (iswx) {
         wx.onTouchStart(function (e) {
@@ -36,19 +36,22 @@ window.onload = function () {
         //canvas.addEventListener('touchend', game.touchend, false);
 
         canvas.addEventListener('mousedown', function (ev) {
-            console.info('mousedown');
+            //  console.info('mousedown');
             game.touchstart(ev);
 
         });
         canvas.addEventListener('mousemove', function (ev) {
-            console.info('mousemove');
+            //   console.info('mousemove');
             game.touchmove(ev);
         });
         canvas.addEventListener('mouseup', function (ev) {
-            console.info('mouseup');
-            game.touchstart(ev);
+            //   console.info('mouseup');
+            game.touchend(ev);
         });
-
+        canvas.addEventListener('mouseout', function (ev) {
+            console.info('mouseout');
+            game.touchend(ev);
+        });
     }
 
     console.info(game);
