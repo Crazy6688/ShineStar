@@ -107,7 +107,13 @@ var SSGame = declare("SSGame", null,
   {
       constructor: function (args) {
           console.info("正在创建游戏");
-          var map = this.map0 = new SSMap(args.map0);
+          var canvas = args.canvas;
+
+          //根据游戏划分区域,先将map0画满整个区域
+          var w = canvas.width, h = canvas.height;
+
+
+          var map = this.map0 = new SSMap({ canvas: canvas, rows: 13, cols: 9, x: 10, y: 20, w: w, h: h });
           var ctx = map.ctx;
 
 
@@ -122,6 +128,13 @@ var SSGame = declare("SSGame", null,
               value: SSColor.White, direct: SSDirect.RD,
               position: new SSPosition(map.getPosition(map.cols * Math.floor(map.rows / 2) + Math.floor(map.cols / 2)))
           });
+          map.items.push(light);
+          var light = new SSLight({
+              value: SSColor.White, direct: SSDirect.RD,
+              position: new SSPosition(map.getPosition(map.cols * Math.floor(map.rows / 2) + Math.floor(map.cols / 2) + 1))
+          });
+        
+
           map.items.push(light);
 
           //var mplane = new SSMPlane({ direct: SSDirect.RU, position: new SSPosition(map.getPosition(light.position.index + (1 + map.cols) * 5)) });
@@ -187,26 +200,26 @@ var SSGame = declare("SSGame", null,
 
           var m = this.map0.normalTouchEvent(e);
           m.event = e;
+          console.log('game.touchstart', m);
           this.map0.action();
-          if (m.valid) {
-              console.log('game.touchstart', m);
-          }
+
+
+
       },
       touchmove: function (e) {
           var m = this.map0.normalTouchEvent(e);
           m.event = e;
           this.map0.action();
           if (m.valid) {
-              console.log('game.touchmove', m);
+
+              //    console.log('game.touchmove', m);
           }
       },
       touchend: function (e) {
           var m = this.map0.normalTouchEvent(e);
           m.event = e;
+          console.log('game.touchend', m);
           this.map0.action();
-          if (m.valid) {
-              console.log('game.touchend', m);
-          }
       }
   });
 
@@ -220,11 +233,13 @@ var SSMapBase = declare("SSMapBase", null, {
         //var rows = this.rows = Math.floor(e.height / size);
         //var cols = this.cols = Math.floor(e.width / size);
 
+        var w = args.w, h = args.h;
+
         //计算块数
         var rows = this.rows = args.rows;
         var cols = this.cols = args.cols;
-        var xsize = Math.floor((e.width - args.x) / rows);
-        var ysize = Math.floor((e.height - args.y) / cols);
+        var xsize = Math.floor((w - args.x) / cols);
+        var ysize = Math.floor((h - args.y) / rows);
         var size = this.size = Math.min(xsize, ysize);
 
 
@@ -264,7 +279,7 @@ var SSMapBase = declare("SSMapBase", null, {
         var x = pt.x - c.offsetLeft - this.offsetX;
         var y = pt.y - c.offsetTop - this.offsetY;
         var at = (x >= rect.x && y >= rect.y && x <= rect.x + rect.w && y <= rect.y + rect.h);
-        console.info(at);
+        // console.info(at);
         return at;
     },
     //获取当前map的位置区域,相对于canvas
@@ -295,7 +310,11 @@ var SSMapBase = declare("SSMapBase", null, {
                 m.valid = 1;
             }
             else if ((e.type == 'touchmove' || (e.type == 'mousemove' && e.buttons == 1))) {
-                if (m.action == SSMouseAction.Down && ((Math.abs(m.downX - x) > this.size / 2)) || (Math.abs(m.downY - y) > this.size / 2)) {
+                var isLarge = ((Math.abs(m.downX - x) > this.size / 3)) || (Math.abs(m.downY - y) > this.size / 3);
+                if (!isLarge) {
+                    console.error(m.downX, m.downY, 'cur', x, y);
+                }
+                if (m.action == SSMouseAction.Down && isLarge) {
                     m.action = SSMouseAction.Move;
                     m.valid = 1;
                 }
@@ -307,12 +326,14 @@ var SSMapBase = declare("SSMapBase", null, {
                 else {
                     m.valid = 1;
                     m.moveIndex = -1;
+                    console.info("not move ??", x, y, m);
                 }
             }
             else if (e.type == 'touchend' || (e.type == 'mouseup')) {
                 m.action = SSMouseAction.None;
                 m.upIndex = index;
                 m.valid = 1;
+                m.moveIndex = -1;
                 if (m.downIndex == m.upIndex) {
                     m.clickIndex = index;
                 }
@@ -325,7 +346,7 @@ var SSMapBase = declare("SSMapBase", null, {
             return this.mouse;
         }
         else {
-            this.mouse = new SSMouseState();
+            // this.mouse = new SSMouseState();
         }
         return this.mouse;
     },

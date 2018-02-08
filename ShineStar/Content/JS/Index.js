@@ -9,7 +9,7 @@ window.onload = function () {
         wx.createCanvas();
 
 
-    var game = new SSGame({ map0: { canvas: canvas, rows: 8, cols: 8, x: 10, y: 10 } });
+    var game = new SSGame({ canvas: canvas });
 
     if (iswx) {
         wx.onTouchStart(function (e) {
