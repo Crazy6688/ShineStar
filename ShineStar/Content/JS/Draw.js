@@ -4,14 +4,19 @@ function drawStar(map, item) {
 
     var pi = Math.PI;
 
+    var isBright = item.value == item.passColor;
     ctx.save();
+    ctx.rotate(-Math.PI / 4 * item.direct);
     ctx.rotate(pi * 36 / 180);
     var s = half - 2;
     //创建路径  
 
 
     ctx.beginPath();
-    ctx.fillStyle = ToColor(item.value);
+    ctx.strokeStyle = item.ToColor() ;
+    ctx.fillStyle = item.ToColor() ;
+
+    ctx.globalAlpha = isBright ? 1 : 0.6;
 
     var dig = pi * 144 / 180;
     for (var i = 0; i < 5; i++) {
@@ -20,8 +25,29 @@ function drawStar(map, item) {
         ctx.lineTo(x * s, y * s);
     }
     ctx.closePath();
-    ctx.stroke();
+    //ctx.stroke();
     ctx.fill();
+    ctx.restore();
+}
+
+function drawStock(map, item) {
+    var ctx = map.ctx, size = map.size, half = size / 2;
+
+
+    var w = size / 1.4;
+    var w2 = w / 2;
+    var h = size * 0.8;
+    var h2 = h / 2;
+    ctx.save();
+    //转回去
+    ctx.rotate(-Math.PI / 4 * item.direct);
+
+    ctx.strokeStyle = "gray";
+    ctx.fillStyle = "#CCCCCC";
+    ctx.fillRect(-w2, -w2, w, w);
+    ctx.strokeRect(-w2, -w2, w, w);
+
+
     ctx.restore();
 }
 
@@ -159,4 +185,66 @@ function drawMLens(map) {
     ctx.restore();
 }
 
-module.exports = [null, drawLight, drawMPlane, drawMBeveled, drawMLens, null, null, null, drawStar];
+//绘制管道,规定:竖着朝上
+function drawPFilter(map, item) {
+    var ctx = map.ctx, size = map.size, half = size / 2;
+
+
+    var w = size / 4;
+    var w2 = w / 2;
+    var h = size * 0.8;
+    var h2 = h / 2;
+    ctx.save();
+
+    ctx.beginPath();
+
+    ctx.strokeStyle = "gray";
+
+    ctx.beginPath();
+    ctx.moveTo(-w2, -h2);
+    ctx.lineTo(-w2, h2);
+    ctx.moveTo(w2, h2);
+    ctx.lineTo(w2, -h2);
+    ctx.stroke();
+    //ctx.strokeRect(-w2, -h2, w, h);
+
+    var color = item.ToColor();
+    if (color != '#ffffff') {
+        ctx.fillStyle = item.ToColor();
+        ctx.fillRect(-w2 + 1, -h2, w - 2, h);
+    }
+
+    ctx.restore();
+
+}
+
+//绘制三棱镜,规定:正三角形的左半边,裁去下角
+function drawMPrism(map, item) {
+    var ctx = map.ctx, size = map.size, half = size / 2;
+
+
+    var w = size / 4;
+    var w2 = w / 2;
+    var h = size * 0.6;
+    var h2 = h / 2;
+    ctx.save();
+
+    ctx.translate(2, 0);
+    ctx.beginPath();
+
+    ctx.strokeStyle = "white";
+
+    ctx.beginPath();
+    ctx.moveTo(0, -h2);
+    ctx.lineTo(-h / 2.3, h2);
+
+    ctx.lineTo(0, h2 / 2);
+
+
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+}
+
+
+module.exports = [null, drawLight, drawMPlane, drawMBeveled, drawMLens, drawMPrism, drawPFilter, drawStock, drawStar];

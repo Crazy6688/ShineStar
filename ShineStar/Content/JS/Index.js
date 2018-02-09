@@ -1,14 +1,17 @@
 ﻿/// <reference path="declare.js" />
 /// <reference path="light.js" />
+var iswx = typeof (wx) != 'undefined';
 
 
-window.onload = function () {
+var SSGame = iswx ? require('./js/ShineStar.js') : SSGame;
 
-    var iswx = typeof (wx) != 'undefined';
-    var canvas = !iswx ? document.getElementById("LCanvas") :
-        wx.createCanvas();
 
-    var game = new SSGame({ canvas: canvas });
+function start(canvas, rate) {
+    rate = rate || 1;
+    canvas.width *= rate;
+    canvas.height *= rate;
+
+    var game = new SSGame({ canvas: canvas, rate: rate, debug: false });
 
     if (iswx) {
         wx.onTouchStart(function (e) {
@@ -78,4 +81,35 @@ window.onload = function () {
     //context.clearRect(30, 30, 30, 30);
 
 }
+
+function ready() {
+    var canvas = null;
+    if (iswx) {
+        canvas = wx.createCanvas();
+
+        wx.getSystemInfo({
+            success: function (res) {
+                console.log(res);
+
+                var rate = res.pixelRatio;
+
+                start(canvas, rate);
+
+            }
+        })
+
+    }
+    else {
+        canvas = document.getElementById("LCanvas");
+        start(canvas, 1);
+    }
+}
+
+if (iswx) {
+    ready();
+}
+else {
+    window.onload = ready;
+}
+
 
