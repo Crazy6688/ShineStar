@@ -105,14 +105,14 @@ var SSGame = declare("SSGame", null,
   {
       constructor: function (args) {
           console.info("正在创建游戏");
-          var canvas = args.canvas;
+          var canvas = this.canvas = args.canvas;
 
           //根据游戏划分区域,先将map0画满整个区域
-          var w = canvas.width, h = canvas.height;
+          var w = canvas.width * 0.8, h = canvas.height * 0.8;
 
-
-          var map = this.map0 = new SSMap({ canvas: canvas, rows: 13, cols: 9, x: 10, y: 20, w: w, h: h });
-          var ctx = map.ctx;
+          var map = this.map0 = new SSMap({ canvas: canvas, rows: 13, cols: 9, x: 10, y: 10, w: w, h: h });
+          var map1 = this.map1 = new SSMap({ canvas: canvas, rows: 2, cols: 9, x: 1, y: map.rows * map.size + 10 + map.offsetY, w: w, h: h });
+          var ctx = this.ctx = map.ctx;
 
 
           //var star = new SSStar({ position: new SSPosition(map.getPosition(30)) });
@@ -129,6 +129,12 @@ var SSGame = declare("SSGame", null,
               position: new SSPosition(map.getPosition(lightIndex))
           });
           map.items.push(light);
+
+          var light2 = new SSLight({
+              value: SSColor.Cyan, direct: SSDirect.RD,
+              position: new SSPosition(map.getPosition(lightIndex - map.cols * 1))
+          });
+          map.items.push(light2);
 
           //var mplane = new SSMPlane({ direct: SSDirect.RU, position: new SSPosition(map.getPosition(light.position.index + (1 + map.cols) * 5)) });
           //map.items.push(mplane);
@@ -153,28 +159,8 @@ var SSGame = declare("SSGame", null,
           });
           map.items.push(mlens);
 
-          for (var i = 0; i < map.count; i++) {
-              var row = Math.floor(i / map.cols);
-              var col = i % map.cols;
-              if (row == 0) {
-                  var mplane = new SSMPlane({ direct: SSDirect.MD, position: new SSPosition(map.getPosition(i)) });
-                  map.items.push(mplane);
-              }
-              else if (row == map.rows - 1) {
-                  var mplane = new SSMPlane({ direct: SSDirect.MU, position: new SSPosition(map.getPosition(i)) });
-                  map.items.push(mplane);
-              }
-              else if (col == 0) {
-                  var mplane = new SSMPlane({ direct: SSDirect.RM, position: new SSPosition(map.getPosition(i)) });
-                  map.items.push(mplane);
-              }
-              else if (col == map.cols - 1) {
-                  var mplane = new SSMPlane({ direct: SSDirect.LM, position: new SSPosition(map.getPosition(i)) });
-                  map.items.push(mplane);
-              }
-
-
-          }
+          var mplane = new SSMPlane({ direct: SSDirect.MD, position: new SSPosition(map.getPosition(lightIndex + map.cols * 3)) });
+          map.items.push(mplane);
 
           var g = this;
           g.draw();
@@ -182,48 +168,43 @@ var SSGame = declare("SSGame", null,
       },
 
       map0: null,
+      map1: null,
 
       draw: function () {
           var g = this;
-          var map = this.map0;
-          var ctx = map.ctx;
 
+          var ctx = this.ctx;
           ctx.fillStyle = "#000000";
           ctx.fillRect(0, 0, 10000, 10000);
-          ctx.save();
 
-          ctx.translate(map.offsetX, map.offsetY);
+          var maps = [this.map0, this.map1];
+          maps.forEach(function (map) {
+              ctx.save();
+              map.draw();
+              ctx.restore();
+          });
 
-
-
-          map.draw();
-
-          ctx.restore();
       },
       touchstart: function (e) {
-
-          var m = this.map0.normalTouchEvent(e);
-          m.event = e;
-          console.log('game.touchstart', m);
-          this.map0.action();
-
-
-
+          this.action(e);
       },
       touchmove: function (e) {
-          var m = this.map0.normalTouchEvent(e);
-          m.event = e;
-          this.map0.action();
-          if (m.valid) {
-
-              //    console.log('game.touchmove', m);
-          }
+          this.action(e);
       },
       touchend: function (e) {
-          var m = this.map0.normalTouchEvent(e);
-          m.event = e;
-          console.log('game.touchend', m);
-          this.map0.action();
+          this.action(e);
+      },
+      action: function (e) {
+          var maps = [this.map0
+             , this.map1
+          ];
+          maps.forEach(function (map) {
+              var m = map.normalTouchEvent(e);
+              m.event = e;
+              if (e.type != 'touchmove' && e.type != 'mousemove')
+                  console.log(e.type, m);
+              map.action();
+          });
       }
   });
 
@@ -239,29 +220,32 @@ var SSMapBase = declare("SSMapBase", null, {
 
         var w = args.w, h = args.h;
 
+        //设置偏移量
+        var offsetX = this.offsetX = args.x;// + (e.width - cols * size) / 2;
+        var offsetY = this.offsetY = args.y;// + (e.height - rows * size) / 2;
+
         //计算块数
         var rows = this.rows = args.rows;
         var cols = this.cols = args.cols;
-        var xsize = Math.floor((w - args.x) / cols);
-        var ysize = Math.floor((h - args.y) / rows);
+        var xsize = Math.floor((w) / cols);
+        var ysize = Math.floor((h) / rows);
         var size = this.size = Math.min(xsize, ysize);
 
 
         var count = this.count = rows * cols;
 
-        //设置偏移量
-        var offsetX = this.offsetX = args.x;// + (e.width - cols * size) / 2;
-        var offsetY = this.offsetY = args.y;// + (e.height - rows * size) / 2;
+
 
         console.info('canvas', e.width, e.height, size, rows, cols);
 
         var map = this;
         var mouse = map.mouse = new SSMouseState({});
-
+        var items = map.items = [];
+        var itemHash = map.itemHash = {};
 
     },
     mouse: null,
-    items: [],
+    items: null,
     //保存索引位置存储的物体
     itemHash: {},
     canvas: null,
@@ -280,8 +264,8 @@ var SSMapBase = declare("SSMapBase", null, {
     isPointInClient: function (pt) {
         var rect = this.getClientRect();
         var c = this.canvas;
-        var x = pt.x - c.offsetLeft - this.offsetX;
-        var y = pt.y - c.offsetTop - this.offsetY;
+        var x = pt.x //- this.offsetX //- c.offsetLeft;
+        var y = pt.y //- this.offsetY //- c.offsetTop;
         var at = (x >= rect.x && y >= rect.y && x <= rect.x + rect.w && y <= rect.y + rect.h);
         // console.info(at);
         return at;
@@ -292,11 +276,13 @@ var SSMapBase = declare("SSMapBase", null, {
     },
     //返回一个标准化的鼠标状态
     normalTouchEvent: function (e) {
-        var isinmap = this.isPointInClient({ x: e.clientX, y: e.clientY });
+        var mx = e.offsetX - this.offsetX, my = e.offsetY - this.offsetY;
+
+        var isinmap = this.isPointInClient({ x: mx, y: my });
 
         var m = this.mouse, c = this.canvas;
-        var x = e.clientX - c.offsetLeft - this.offsetX;
-        var y = e.clientY - c.offsetTop - this.offsetY;
+        var x = mx //- this.offsetX //- c.offsetLeft;
+        var y = my //- this.offsetY //- c.offsetTop;
         m.clientX = x;
         m.clientY = y;
 
@@ -379,7 +365,7 @@ var SSMapBase = declare("SSMapBase", null, {
     },
     //获取相对坐标所在的索引位置
     getIndex: function (p, p2) {
-        var x = p.x || p.clientX || p;
+        var x = p.x || p.offsetX || p;
         var y = p2 || p.y;
         var col = Math.floor(x / this.size);
         var row = Math.floor(y / this.size);
@@ -476,9 +462,16 @@ var SSMap = declare("SSMap", SSMapBase,
           var size = this.size, rows = this.rows, cols = this.cols;
           var maxX = cols * size;
           var maxY = rows * size;
+
+
+          ctx.strokeStyle = "green";
+          ctx.translate(this.offsetX, this.offsetY);
+
+          ctx.strokeRect(1, 1, this.w - 2, this.h - 2);
+
+          //draw offset area
           ctx.save();
           ctx.strokeStyle = "red";
-
           //draw grid
           ctx.beginPath();
           for (var i = 0; i <= rows; i++) {
@@ -496,36 +489,25 @@ var SSMap = declare("SSMap", SSMapBase,
 
           var map = this;
 
-          this.allDirect = this.allDirect || SSDirect.LU;
+          this.calculate();
 
+
+
+          map.ddd = map.ddd || 0;
           this.items.forEach(function (item) {
-              var pos = item.position;
-              ctx.save();
-
-              //ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
-
-              //if (item.type == SSType.Light)
-              //    item.direct = (item.direct + 1) % 8;
-
               //旋转起来看看是否对称
-              //ctx.strokeRect(-5, -5, 10, 10);
-              //ctx.rotate(Math.PI / 4 * ddd);
-
-              item.draw(map);
-              ctx.restore();
+              //item.direct = NormalDirect(item.direct + 1);
           }, this);
 
 
-          this.calculate();
-
           //鼠标调试
-          ctx.fillStyle = "blue";
-          ctx.font = "30px Arial";
-          ctx.fillText(" pt:" + this.mouse.clientX + "," + this.mouse.clientY + " di:" + this.mouse.downIndex + " ui:" + this.mouse.upIndex + " mi:" + this.mouse.moveIndex, 0, 50);
+          ctx.fillStyle = "white";
+          ctx.font = "20px Arial";
+          ctx.fillText(" pt:" + this.mouse.clientX + "," + this.mouse.clientY + " di:" + this.mouse.downIndex + " ui:" + this.mouse.upIndex + " mi:" + this.mouse.moveIndex, 0, 20);
 
           var e = this.mouse.event;
           if (e)
-              ctx.fillText(" ept:" + e.clientX + "," + e.clientY, 0, 150);
+              ctx.fillText(" ept:" + e.offsetX + "," + e.offsetY, 0, 50);
 
 
           //绘制光线
@@ -535,7 +517,11 @@ var SSMap = declare("SSMap", SSMapBase,
               ctx.restore();
           });
 
-
+          this.items.forEach(function (item) {
+              ctx.save();
+              item.draw(map);
+              ctx.restore();
+          }, this);
 
 
       },
@@ -658,32 +644,47 @@ var SSCompose = declare("SSCompose", null, {
         var pos = map.getPosition(this.index);
         ctx.save();
 
-        //ctx.lineCap = 'square';
+        ctx.miterLimit = 2;
+        ctx.lineCap = 'round';
+        //  ctx.lineJoin = "round";
         ctx.lineWidth = 3;
 
         ctx.translate(pos.x + map.size / 2, pos.y + 1 + map.size / 2);
 
-        this.colorIn.forEach(function (c, i) {
-            if (c == 0)
-                return;
+        for (var i = 0; i < 8; i++)
+        {
+            var color = this.colorIn[i] | this.colorOut[i];
+            if (color == SSColor.None)
+                continue;
             ctx.beginPath();
-            ctx.strokeStyle = ToColor(c);
+            ctx.strokeStyle = ToColor(color);
             ctx.moveTo(0, 0);
             var pt = map.getDirectAxis(i);
             ctx.lineTo(pt.x, pt.y);
             ctx.stroke();
-        });
+        }
 
-        this.colorOut.forEach(function (c, i) {
-            if (c == 0)
-                return;
-            ctx.beginPath();
-            ctx.strokeStyle = ToColor(c);
-            ctx.moveTo(0, 0);
-            var pt = map.getDirectAxis(i);
-            ctx.lineTo(pt.x, pt.y);
-            ctx.stroke();
-        });
+        //this.colorIn.forEach(function (c, i) {
+        //    if (c == 0)
+        //        return;
+        //    ctx.beginPath();
+        //    ctx.strokeStyle = ToColor(c);
+        //    ctx.moveTo(0, 0);
+        //    var pt = map.getDirectAxis(i);
+        //    ctx.lineTo(pt.x, pt.y);
+        //    ctx.stroke();
+        //});
+
+        //this.colorOut.forEach(function (c, i) {
+        //    if (c == 0)
+        //        return;
+        //    ctx.beginPath();
+        //    ctx.strokeStyle = ToColor(c);
+        //    ctx.moveTo(0, 0);
+        //    var pt = map.getDirectAxis(i);
+        //    ctx.lineTo(pt.x, pt.y);
+        //    ctx.stroke();
+        //});
 
 
         ctx.restore();
@@ -797,15 +798,15 @@ var SSMPlane = declare("SSMPlane", SSItem, {
     },
     shine: function (s) {
         var sub = NormalDirect(this.direct - s.direct);
-        var color = s.color ^ 0xFF0000;
+        var color = s.color// ^ 0xFF0000;
         //Math.abs(this.direct - s.direct);
         if (sub == 0) {
-            var color = s.color ^ 0xFF0000;
+            //var color = s.color ^ 0xFF0000;
             var ns = new SSShine({ index: s.index, color: color, direct: this.direct });
             return [ns];
         }
         if (sub == 1) {
-            var color = s.color ^ 0x00FF00;
+            // var color = s.color ^ 0x00FF00;
             var ns = new SSShine({
                 index: s.index, color: color,
                 direct: NormalDirect(s.direct + 2)
@@ -813,7 +814,7 @@ var SSMPlane = declare("SSMPlane", SSItem, {
             return [ns];
         }
         if (sub == 7) {
-            var color = s.color ^ 0x0000FF;
+            //   var color = s.color ^ 0x0000FF;
             var ns = new SSShine({
                 index: s.index, color: color,
                 direct: NormalDirect(s.direct - 2)
