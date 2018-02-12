@@ -13,8 +13,8 @@ function drawStar(map, item) {
 
 
     ctx.beginPath();
-    ctx.strokeStyle = item.ToColor() ;
-    ctx.fillStyle = item.ToColor() ;
+    ctx.strokeStyle = item.ToColor();
+    ctx.fillStyle = item.ToColor();
 
     ctx.globalAlpha = isBright ? 1 : 0.6;
 
@@ -222,24 +222,47 @@ function drawPFilter(map, item) {
 function drawMPrism(map, item) {
     var ctx = map.ctx, size = map.size, half = size / 2;
 
+    var r = size * 0.4;
 
-    var w = size / 4;
-    var w2 = w / 2;
-    var h = size * 0.6;
-    var h2 = h / 2;
     ctx.save();
+    ctx.lineWidth = 2;
+    ctx.rotate(-Math.PI / 4);
 
-    ctx.translate(2, 0);
+    var x1 = -r * 1.732 / 2, y1 = r / 2;
+    var x2 = r * 1.732 / 2, y2 = r / 2;
+
+    var grad = ctx.createLinearGradient(x1, y1, x2, y2);
+    /* 指定几个颜色 */
+
+    grad.addColorStop(0, "red");
+    grad.addColorStop(0.1, "green");
+    grad.addColorStop(0.2, "blue");
+    grad.addColorStop(0.3, "red");
+    grad.addColorStop(0.4, "green");
+    grad.addColorStop(0.5, "blue");
+    grad.addColorStop(0.6, "red");
+    grad.addColorStop(0.7, "green");
+    grad.addColorStop(0.8, "blue");
+    grad.addColorStop(0.9, "white");
+    grad.addColorStop(1, "white");
+    //grad.addColorStop(0, "blue");
+    //grad.addColorStop(0.2, "green");
+    //grad.addColorStop(0.4, "red");
+    //grad.addColorStop(0.6, "blue");
+    //grad.addColorStop(0.8, "green");
+    //grad.addColorStop(1, "red");
+    //grad.addColorStop(1, item.ToColor(SSColors[i + 1]));  // 紫
+    /* 将这个渐变设置为fillStyle */
+    ctx.strokeStyle = grad;
+
     ctx.beginPath();
 
-    ctx.strokeStyle = "white";
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.rotate(-2 * Math.PI / 3);
 
-    ctx.beginPath();
-    ctx.moveTo(0, -h2);
-    ctx.lineTo(-h / 2.3, h2);
-
-    ctx.lineTo(0, h2 / 2);
-
+    ctx.lineTo(x2, y2);
+    //ctx.rotate(-2 * Math.PI / 3);
 
     ctx.closePath();
     ctx.stroke();

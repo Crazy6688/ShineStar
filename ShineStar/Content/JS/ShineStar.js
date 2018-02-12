@@ -6,7 +6,6 @@ var iswx = typeof (wx) != 'undefined';
 var declare = declare || require('./declare.js');
 var drawFuncs = iswx ? require('./Draw.js') : [null, drawLight, drawMPlane, drawMBeveled, drawMLens, drawMPrism, drawPFilter, drawStock, drawStar];
 
-
 function RGB(r, g, b) {
     return (r << 16) + (g << 8) + b;
 };
@@ -107,16 +106,16 @@ var SSGame = declare("SSGame", null,
       constructor: function (args) {
           console.info("正在创建游戏");
           var canvas = this.canvas = args.canvas;
-
+          var rate = args.rate;
           //根据游戏划分区域,先将map0画满整个区域
           var w = canvas.width * 1, h = canvas.height * 0.8;
           var debug = args.debug || false;
-          var map = this.map0 = new SSMap({ debug: debug, canvas: canvas, rows: 13, cols: 9, x: 2, y: 0, w: w, h: h });
-          var map1 = this.map1 = new SSMap({ debug: debug, canvas: canvas, rows: 2, cols: 9, x: 1, y: map.rows * map.size + 10 + map.offsetY, w: w, h: h });
+          var map = this.map0 = new SSMap({ debug: debug, canvas: canvas, rows: 13, cols: 9, x: 1 * rate, y: 50 * rate, w: w, h: h });
+          var map1 = this.map1 = new SSMap({ debug: debug, canvas: canvas, rows: 2, cols: 9, x: 1 * rate, y: map.rows * map.size + 10 * rate + map.offsetY, w: w, h: h });
           var ctx = this.ctx = map.ctx;
 
           var cs = [SSColor.Red
-              , SSColor.Blue, SSColor.Yellow, SSColor.Green, SSColor.Pink, SSColor.Cyan
+            , SSColor.Blue, SSColor.Yellow, SSColor.Green, SSColor.Pink, SSColor.Cyan
           ];
 
           var lightIndex = Math.floor(0);
@@ -206,11 +205,11 @@ var SSGame = declare("SSGame", null,
           var workItems = g.map0.items;
           //var waitItems = map1.items;
 
-          var starts = [];
+          var stars = [];
           var brightCount = 0, totalCount = 0;
           workItems.forEach(function (item) {
               if (item.type == SSType.Star) {
-                  starts.push(item);
+                  stars.push(item);
                   totalCount++;
                   // var c = g.map0.getCompose(item.position.index);
                   if (item.value == item.passColor) {
@@ -222,7 +221,7 @@ var SSGame = declare("SSGame", null,
           ctx.font = Math.floor(20 * this.rate) + "px 微软雅黑";
           ctx.textBaseline = "top";
           ctx.strokeStyle = "white";
-          ctx.strokeText('start: ' + totalCount + ' bright: ' + brightCount, 0, 0);
+          ctx.strokeText('star: ' + totalCount + ' bright: ' + brightCount, 0, 0);
 
       },
       touchstart: function (e) {
@@ -241,7 +240,7 @@ var SSGame = declare("SSGame", null,
           var yy = e.yy = this.rate * (iswx ? e.clientY : e.offsetY);
 
           var maps = [this.map0
-             , this.map1
+            , this.map1
           ];
           maps.forEach(function (map) {
               var m = map.normalTouchEvent(e);
@@ -307,13 +306,13 @@ var SSMapBase = declare("SSMapBase", null, {
     //间隙
     gap: 0,
 
-    //判断坐标点是否在地图区域内
+    //判断坐标点是否在地图区域内,pt已经偏移计算进入canvas的画布的相对位置
     isPointInClient: function (pt) {
         var rect = this.getClientRect();
         var c = this.canvas;
         var x = pt.x //- this.offsetX //- c.offsetLeft;
         var y = pt.y //- this.offsetY //- c.offsetTop;
-        var at = (x >= rect.x && y >= rect.y && x <= rect.x + rect.w && y <= rect.y + rect.h);
+        var at = (x >= 0 && y >= 0 && x <= rect.w && y <= rect.h);
         // console.info(at);
         return at;
     },
@@ -385,7 +384,10 @@ var SSMapBase = declare("SSMapBase", null, {
             return this.mouse;
         }
         else {
-            // this.mouse = new SSMouseState();
+            //不在范围内,立即取消移动和点击
+            m.action = SSMouseAction.None;
+            m.upIndex = m.downIndex = m.clickIndex = m.moveIndex = -1;
+            m.valid = 0;
         }
         return this.mouse;
     },
@@ -469,17 +471,21 @@ var SSMapBase = declare("SSMapBase", null, {
                 item.rotate();
             }
         }
+
         if (m.upIndex != m.downIndex && m.upIndex != -1) {
             var dItem = this.getItem(m.downIndex);
             var uItem = this.getItem(m.upIndex);
             if (uItem == null && dItem != null) {
+                console.warn('move ', m.downIndex, '->', m.upIndex, dItem.type);
                 dItem.position = this.getPosition(m.upIndex);
             }
         }
+
         if (m.action == SSMouseAction.None) {
             if (this.moveItem != null)
                 this.moveItem.moving = false;
             this.moveItem = null;
+            m.upIndex = m.downIndex = m.clickIndex = -1;
         }
     }
 });
@@ -767,6 +773,7 @@ var SSShine = declare("SSShine", null,
 var SSItem = declare("SSItem", null,
   {
       constructor: function () { },
+      toString: function () { return this.className; },
       type: SSType.None,
       direct: SSDirect.MU,
       name: 'no name',
@@ -783,7 +790,7 @@ var SSItem = declare("SSItem", null,
           this.direct = NormalDirect(this.direct + 1);
           console.log('roate:', this.name, this.type, this.direct);
       },
-      ToColor: function () { return ToColor(this.value); },
+      ToColor: function (c) { return ToColor(c || this.value); },
 
       draw: function (map) {
           var ctx = map.ctx;
@@ -1013,42 +1020,77 @@ var SSMPrism = declare("SSMPrism", SSItem, {
     shine: function (s) {
         var sub = NormalDirect(this.direct - s.direct);
 
+        //规定:  入射位置和朝向相同,不会出去任何颜色!
+        //      白色从0入射,棱镜朝向为1, 将会依次均分成为rgb三个颜色:3,4,5
+        //      光线可逆
+        //分析结果如下:
+        /*
+        差	入射	R	G	B
+        1	0	3	4	5
+        0	1	n	n	n
+        7	2	5	6	n
+        6	3	0	n	n
+        5	4	n	0	7
+        4	5	2	n	0
+        3	6	n	2	n
+        2	7	n	n	4
+        */
         var r = s.color & 0xFF0000;
         var g = s.color & 0x00FF00;
         var b = s.color & 0x0000FF;
 
-        if (sub == 0) {
+        var ret = [];
+
+        if (sub == 0)
             return [];
-        }
         if (sub == 1) {
-            var nsr = new SSShine({ index: s.index, color: r, direct: NormalDirect(s.direct + 4) });
-            var nsg = new SSShine({ index: s.index, color: g, direct: NormalDirect(s.direct - 3) });
-            var nsb = new SSShine({ index: s.index, color: b, direct: NormalDirect(s.direct - 2) });
+            var nsr = new SSShine({ index: s.index, color: r, direct: NormalDirect(s.direct + 3) });
+            var nsg = new SSShine({ index: s.index, color: g, direct: NormalDirect(s.direct + 4) });
+            var nsb = new SSShine({ index: s.index, color: b, direct: NormalDirect(s.direct + 5) });
+            ret = ret.concat([nsr, nsg, nsb]);
+        }
 
-            return [nsr, nsg, nsb];
-        }
-        if (sub == 3 || sub == 6) {
-            var nsr = new SSShine({ index: s.index, color: r, direct: NormalDirect(s.direct + 4) });
-            return [nsr];
-        }
-        if (sub == 4) {
-            var nsg = new SSShine({ index: s.index, color: g, direct: NormalDirect(s.direct - 3) });
-            var nsb = new SSShine({ index: s.index, color: b, direct: NormalDirect(s.direct + 2) });
-            return [nsg, nsb];
-        }
-        if (sub == 5) {
-            var nsg = new SSShine({ index: s.index, color: g, direct: NormalDirect(s.direct + 3) });
-            var nsb = new SSShine({ index: s.index, color: b, direct: NormalDirect(s.direct - 2) });
-            return [nsg, nsb];
-        }
+        //////////////////////////////
         if (sub == 7) {
-            var nsr = new SSShine({ index: s.index, color: r, direct: NormalDirect(s.direct + 4) });
-            var nsg = new SSShine({ index: s.index, color: g, direct: NormalDirect(s.direct + 3) });
-            var nsb = new SSShine({ index: s.index, color: b, direct: NormalDirect(s.direct + 2) });
-
-            return [nsr, nsg, nsb];
+            var nsr = new SSShine({ index: s.index, color: r, direct: NormalDirect(s.direct + 3) });
+            var nsg = new SSShine({ index: s.index, color: g, direct: NormalDirect(s.direct + 4) });
+            ret = ret.concat([nsr, nsg]);
         }
-        return [];
+
+        /////////////////////////////////////
+        //
+        if (sub == 6) {
+            var nsr = new SSShine({ index: s.index, color: r, direct: NormalDirect(s.direct + 5) });
+            ret = ret.concat([nsr]);
+        }
+
+        //////////////////////////////////
+        if (sub == 5) {
+            var nsg = new SSShine({ index: s.index, color: g, direct: NormalDirect(s.direct + 4) });
+            var nsb = new SSShine({ index: s.index, color: b, direct: NormalDirect(s.direct + 3) });
+            ret = ret.concat([nsg, nsb]);
+        }
+
+        /////////////////////////////////
+        if (sub == 4) {
+            var nsr = new SSShine({ index: s.index, color: r, direct: NormalDirect(s.direct + 5) });
+            var nsb = new SSShine({ index: s.index, color: b, direct: NormalDirect(s.direct + 3) });
+            ret = ret.concat([nsr, nsb]);
+        }
+
+        //////////////////////////////////
+        if (sub == 3) {
+            var nsg = new SSShine({ index: s.index, color: g, direct: NormalDirect(s.direct + 4) });
+
+            ret = ret.concat([nsg]);
+        }
+        /////////////////////////////////
+        if (sub == 2) {
+            var nsb = new SSShine({ index: s.index, color: b, direct: NormalDirect(s.direct + 5) });
+
+            ret = ret.concat([nsb]);
+        }
+        return ret;
     }
 });
 

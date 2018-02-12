@@ -11,7 +11,7 @@ function start(canvas, rate) {
     canvas.width *= rate;
     canvas.height *= rate;
 
-    var game = new SSGame({ canvas: canvas, rate: rate, debug: false });
+    var game = new SSGame({ canvas: canvas, rate: rate, debug: true });
 
     if (iswx) {
         wx.onTouchStart(function (e) {
